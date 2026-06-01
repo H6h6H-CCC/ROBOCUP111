@@ -80,6 +80,9 @@ uint8_t QRPacke1[2];
 uint8_t Coulor[5];
 uint8_t place[7] = {'0', '0', '0', '0', '0', '0', '\0'};
 volatile uint8_t vision_place_valid = 0U;
+static volatile uint16_t vision_x_latest = 0U;
+static volatile uint16_t vision_y_latest = 0U;
+static uint8_t vision_color_index = 0U;
 uint8_t distancestate=0;
 uint8_t accValid = 0;
 char displayBuffer[20];
@@ -103,20 +106,15 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static uint8_t is_ascii_digit(uint8_t value)
-{
-    return (value >= (uint8_t)'0') && (value <= (uint8_t)'9');
-}
-
 uint8_t get_vision_xy(uint16_t *vision_x, uint16_t *vision_y, uint16_t max_x, uint16_t max_y)
 {
-    uint8_t place_snapshot[6];
+    uint16_t x_snapshot = 0U;
+    uint16_t y_snapshot = 0U;
     uint8_t valid = 0U;
 
     __disable_irq();
-    for (uint8_t i = 0U; i < 6U; i++) {
-        place_snapshot[i] = place[i];
-    }
+    x_snapshot = vision_x_latest;
+    y_snapshot = vision_y_latest;
     valid = vision_place_valid;
     __enable_irq();
 
@@ -126,26 +124,122 @@ uint8_t get_vision_xy(uint16_t *vision_x, uint16_t *vision_y, uint16_t max_x, ui
         return 0U;
     }
 
-    for (uint8_t i = 0U; i < 6U; i++) {
-        if (is_ascii_digit(place_snapshot[i]) == 0U) {
-            *vision_x = 0U;
-            *vision_y = 0U;
-            return 0U;
-        }
-    }
-
-    *vision_x = 100U * (place_snapshot[0] - (uint8_t)'0') +
-                10U * (place_snapshot[1] - (uint8_t)'0') +
-                (place_snapshot[2] - (uint8_t)'0');
-    *vision_y = 100U * (place_snapshot[3] - (uint8_t)'0') +
-                10U * (place_snapshot[4] - (uint8_t)'0') +
-                (place_snapshot[5] - (uint8_t)'0');
-
-    if ((*vision_x > max_x) || (*vision_y > max_y)) {
+    if ((x_snapshot > max_x) || (y_snapshot > max_y)) {
+        *vision_x = 0U;
+        *vision_y = 0U;
         return 0U;
     }
 
+    *vision_x = x_snapshot;
+    *vision_y = y_snapshot;
+
     return 1U;
+}
+
+static uint16_t Vision_ReadLe16(const uint8_t *data)
+{
+    return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
+}
+
+static uint32_t Vision_ReadLe32(const uint8_t *data)
+{
+    return (uint32_t)data[0] |
+           ((uint32_t)data[1] << 8) |
+           ((uint32_t)data[2] << 16) |
+           ((uint32_t)data[3] << 24);
+}
+
+static uint8_t Vision_ColorIdToChar(uint8_t color_id)
+{
+    switch (color_id) {
+    case 1U: return (uint8_t)'w';
+    case 2U: return (uint8_t)'r';
+    case 3U: return (uint8_t)'b';
+    case 4U: return (uint8_t)'g';
+    case 5U: return (uint8_t)'k';
+    default: return 0U;
+    }
+}
+
+static void Vision_SaveQr(uint32_t qr_num)
+{
+    uint8_t tens = (uint8_t)(((qr_num % 100U) / 10U) + (uint32_t)'0');
+    uint8_t units = (uint8_t)((qr_num % 10U) + (uint32_t)'0');
+
+    if (QRPacke1[0] == 0U && QRPacke1[1] == 0U) {
+        QRPacke1[0] = tens;
+        QRPacke1[1] = units;
+    } else if ((QRPacke1[0] != tens) || (QRPacke1[1] != units)) {
+        QRPacke[0] = tens;
+        QRPacke[1] = units;
+    }
+}
+
+static void Vision_SaveColor(uint8_t color_id)
+{
+    uint8_t color_char = Vision_ColorIdToChar(color_id);
+
+    if (color_char == 0U) {
+        return;
+    }
+
+    Coulor[vision_color_index] = color_char;
+    vision_color_index++;
+    if (vision_color_index >= 5U) {
+        vision_color_index = 0U;
+    }
+}
+
+static void Vision_SaveLocation(int16_t x, int16_t y)
+{
+    uint16_t legacy_x = 0U;
+    uint16_t legacy_y = 0U;
+
+    if ((x < 0) || (y < 0)) {
+        vision_place_valid = 0U;
+        return;
+    }
+
+    __disable_irq();
+    vision_x_latest = (uint16_t)x;
+    vision_y_latest = (uint16_t)y;
+    vision_place_valid = 1U;
+    __enable_irq();
+
+    legacy_x = ((uint16_t)x > 999U) ? 999U : (uint16_t)x;
+    legacy_y = ((uint16_t)y > 999U) ? 999U : (uint16_t)y;
+    place[0] = (uint8_t)((legacy_x / 100U) + (uint16_t)'0');
+    place[1] = (uint8_t)(((legacy_x / 10U) % 10U) + (uint16_t)'0');
+    place[2] = (uint8_t)((legacy_x % 10U) + (uint16_t)'0');
+    place[3] = (uint8_t)((legacy_y / 100U) + (uint16_t)'0');
+    place[4] = (uint8_t)(((legacy_y / 10U) % 10U) + (uint16_t)'0');
+    place[5] = (uint8_t)((legacy_y % 10U) + (uint16_t)'0');
+}
+
+static void Vision_ParseNewFrame(const uint8_t *buf, uint16_t size)
+{
+    uint8_t type = 0U;
+    uint8_t len = 0U;
+
+    if ((size < 5U) || (buf[0] != 0xAAU)) {
+        return;
+    }
+
+    type = buf[1];
+    len = buf[2];
+
+    if ((len > 4U) || (size < (uint16_t)(len + 4U)) || (buf[len + 3U] != 0x55U)) {
+        return;
+    }
+
+    if ((type == 0x01U) && (len == 1U)) {
+        Vision_SaveColor(buf[3]);
+    } else if ((type == 0x02U) && (len == 4U)) {
+        Vision_SaveQr(Vision_ReadLe32(&buf[3]));
+    } else if ((type == 0x03U) && (len == 4U)) {
+        Vision_SaveLocation((int16_t)Vision_ReadLe16(&buf[3]),
+                            (int16_t)Vision_ReadLe16(&buf[5]));
+    }
 }
 
 static float clamp_float(float value, float min_value, float max_value)
@@ -463,6 +557,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	__HAL_DMA_DISABLE_IT(&hdma_uart4_rx, DMA_IT_HT);
 	if(huart == &huart1)
     {
+        Vision_ParseNewFrame(rxBuffer2, Size);
+        rxBuffer2[0] = 0U;
         if(rxBuffer2[0] == 0xAA && rxBuffer2[3] == 0x55)
 		{	 
 		  a = rxBuffer2[1];

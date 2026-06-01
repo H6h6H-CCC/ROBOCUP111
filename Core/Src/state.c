@@ -71,8 +71,8 @@ uint8_t duo6=1;
 
 void CHANge(uint8_t i)
 {
-	txBuffer2[0]=0xAE;txBuffer2[1]=i;txBuffer2[2]=0x55;
-	HAL_UART_Transmit_DMA(&huart2,txBuffer2,3);
+	txBuffer2[0]=0xAA;txBuffer2[1]=0x00;txBuffer2[2]=i;txBuffer2[3]=0x55;
+	HAL_UART_Transmit_DMA(&huart1,txBuffer2,4);
 }
 
 static void State_RunTimedTranslate(float angle_deg, float velocity_mps, uint32_t duration_ms)
