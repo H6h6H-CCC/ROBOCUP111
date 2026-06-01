@@ -1,0 +1,22 @@
+﻿{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "STM32: Flash (CubeProgrammer CLI)",
+      "type": "shell",
+      "command": "C:/Users/abcd1/AppData/Local/stm32cube/bundles/programmer/2.22.0+st.1/bin/STM32_Programmer_CLI.exe",
+      "args": [
+        "-c",
+        "port=SWD",
+        "-w",
+        "${command:st-stm32-ide-debug-launch.get-projects-binary-from-context1}",
+        "-v"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    }
+  ]
+}
