@@ -59,21 +59,21 @@ float Gray_Trace_Get_Dir(void)
 
 	//左转模式
     case 0x7F: dir = 0.08; break;  //仅左4触线
-	  case 0x3F: dir = 0.15; break;   //左4+左3触线
-    case 0xBF: dir = 0.3; break;  //仅左3触线
-	  case 0x9F: dir = 0.4; break;   //左3+左2触线
-    case 0xDF: dir = 0.5; break;  //仅左2触线
-	  case 0xCF: dir = 1; break;   //左2+左1触线
-    case 0xEF: dir = 2; break;   //仅左1触线
+	  case 0x3F: dir = 0.27; break;   //左4+左3触线
+    case 0xBF: dir = 0.4; break;  //仅左3触线
+	  case 0x9F: dir = 0.6; break;   //左3+左2触线
+    case 0xDF: dir = 0.8; break;  //仅左2触线
+	  case 0xCF: dir = 2; break;   //左2+左1触线
+    case 0xEF: dir = 3; break;   //仅左1触线
     
     //右转模式
     case 0xFE: dir = -0.08; break;  //仅右4触线
-	  case 0xFC: dir = -0.15; break;   //右4+右3触线
-    case 0xFD: dir = -0.3; break;  //仅右3触线
-    case 0xF9: dir = -0.4; break;   //右3+右2触线
-    case 0xFB: dir = -0.5; break;  //仅右2触线
-	  case 0xF3: dir = -1; break;   //右2+右1触线
-    case 0xF7: dir = -2; break;   //仅右1触线
+	  case 0xFC: dir = -0.27; break;   //右4+右3触线
+    case 0xFD: dir = -0.4; break;  //仅右3触线
+    case 0xF9: dir = -0.6; break;   //右3+右2触线
+    case 0xFB: dir = -0.8; break;  //仅右2触线
+	  case 0xF3: dir = -2; break;   //右2+右1触线
+    case 0xF7: dir = -3; break;   //仅右1触线
 
     default:   
 		dir = 0;break;

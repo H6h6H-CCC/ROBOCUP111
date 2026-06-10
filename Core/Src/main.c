@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "stm32f4xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -35,6 +36,7 @@
 #include "state.h"
 #include "duoji.h"
 #include "shijue.h"
+#include <stdint.h>
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -49,6 +51,7 @@
 #define DUOJI_BOOT_SETTLE_DELAY_MS 50U
 #define DUOJI_BOOT_REHOME_DELAY_MS 450U
 #define VISION_DEBUG_PRINT_PERIOD_MS 200U
+#define VISION_YAJUN_ACTION_DELAY_MS 1700U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -75,14 +78,17 @@ uint8_t rxBuffer2[10];
 uint8_t txBuffer2[10];
 uint8_t rxBuffer3[100];
 uint8_t rxBuffer4[256];
+uint8_t rxBuffer5[256];
 uint8_t QRPacke[2];
 uint8_t QRPacke1[2];
 uint8_t Coulor[5];
 uint8_t place[7] = {'0', '0', '0', '0', '0', '0', '\0'};
 volatile uint8_t vision_place_valid = 0U;
+volatile uint8_t vision_current_cmd = 0U;
 static volatile uint16_t vision_x_latest = 0U;
 static volatile uint16_t vision_y_latest = 0U;
-static uint8_t vision_color_index = 0U;
+static uint8_t vision_color_count = 0U;
+static uint8_t vision_debug_tx[40];
 uint8_t distancestate=0;
 uint8_t accValid = 0;
 char displayBuffer[20];
@@ -161,33 +167,79 @@ static uint8_t Vision_ColorIdToChar(uint8_t color_id)
     }
 }
 
+static uint8_t Vision_ColorDebugChar(uint8_t color)
+{
+    return (color == 0U) ? (uint8_t)'0' : color;
+}
+
+static void Vision_SendParsedDebug(uint8_t type, uint32_t qr_num, uint8_t color_char, int16_t x, int16_t y)
+{
+    int len = 0;
+
+    if (huart2.gState != HAL_UART_STATE_READY) {
+        return;
+    }
+
+    if (type == 0x01U) {
+        (void)color_char;
+        len = snprintf((char *)vision_debug_tx, sizeof(vision_debug_tx), "COLOR,%c%c%c%c%c\r\n",
+                       Vision_ColorDebugChar(Coulor[0]),
+                       Vision_ColorDebugChar(Coulor[1]),
+                       Vision_ColorDebugChar(Coulor[2]),
+                       Vision_ColorDebugChar(Coulor[3]),
+                       Vision_ColorDebugChar(Coulor[4]));
+    } else if (type == 0x02U) {
+        len = snprintf((char *)vision_debug_tx, sizeof(vision_debug_tx), "QR,%lu\r\n", (unsigned long)qr_num);
+    } else if (type == 0x03U) {
+        len = snprintf((char *)vision_debug_tx, sizeof(vision_debug_tx), "LOC,%d,%d\r\n", (int)x, (int)y);
+    }
+
+    if ((len > 0) && (len < (int)sizeof(vision_debug_tx))) {
+        HAL_UART_Transmit_DMA(&huart2, vision_debug_tx, (uint16_t)len);
+    }
+}
+
 static void Vision_SaveQr(uint32_t qr_num)
 {
     uint8_t tens = (uint8_t)(((qr_num % 100U) / 10U) + (uint32_t)'0');
     uint8_t units = (uint8_t)((qr_num % 10U) + (uint32_t)'0');
 
-    if (QRPacke1[0] == 0U && QRPacke1[1] == 0U) {
-        QRPacke1[0] = tens;
-        QRPacke1[1] = units;
-    } else if ((QRPacke1[0] != tens) || (QRPacke1[1] != units)) {
+    if (vision_current_cmd == 0x01U) {
         QRPacke[0] = tens;
         QRPacke[1] = units;
+    } else if (vision_current_cmd == 0x03U) {
+        QRPacke1[0] = tens;
+        QRPacke1[1] = units;
     }
+
+    Vision_SendParsedDebug(0x02U, qr_num, 0U, 0, 0);
 }
 
 static void Vision_SaveColor(uint8_t color_id)
 {
     uint8_t color_char = Vision_ColorIdToChar(color_id);
+    uint8_t i = 0U;
 
     if (color_char == 0U) {
         return;
     }
 
-    Coulor[vision_color_index] = color_char;
-    vision_color_index++;
-    if (vision_color_index >= 5U) {
-        vision_color_index = 0U;
+    for (i = 0U; i < vision_color_count; i++) {
+        if (Coulor[i] == color_char) {
+            Vision_SendParsedDebug(0x01U, 0U, 0U, 0, 0);
+            return;
+        }
     }
+
+    if (vision_color_count >= 5U) {
+        Vision_SendParsedDebug(0x01U, 0U, 0U, 0, 0);
+        return;
+    }
+
+    Coulor[vision_color_count] = color_char;
+    vision_color_count++;
+
+    Vision_SendParsedDebug(0x01U, 0U, 0U, 0, 0);
 }
 
 static void Vision_SaveLocation(int16_t x, int16_t y)
@@ -214,6 +266,8 @@ static void Vision_SaveLocation(int16_t x, int16_t y)
     place[3] = (uint8_t)((legacy_y / 100U) + (uint16_t)'0');
     place[4] = (uint8_t)(((legacy_y / 10U) % 10U) + (uint16_t)'0');
     place[5] = (uint8_t)((legacy_y % 10U) + (uint16_t)'0');
+
+    Vision_SendParsedDebug(0x03U, 0U, 0U, x, y);
 }
 
 static void Vision_ParseNewFrame(const uint8_t *buf, uint16_t size)
@@ -536,6 +590,236 @@ uint8_t Vision_XY_PID_Then_Forward_Backward(uint16_t vision_x,
 
     return 1U;
 }
+uint8_t duoooooo=1;
+uint8_t Vision_XY_PID_Then_Forward_Backward2(uint16_t vision_x,
+                                                   uint16_t vision_y,
+                                                   uint8_t valid,
+                                                   uint16_t center_x,
+                                                   uint16_t max_x,
+                                                   uint16_t center_y,
+                                                   uint16_t max_y,
+                                                   uint16_t deadband_x_px,
+                                                   uint16_t deadband_y_px,
+                                                   float kp_x,
+                                                   float ki_x,
+                                                   float kd_x,
+                                                   float kp_y,
+                                                   float ki_y,
+                                                   float kd_y,
+                                                   float min_speed_mps,
+                                                   float max_speed_mps,
+                                                   float integral_limit_x,
+                                                   float integral_limit_y,
+                                                   uint32_t update_period_ms,
+                                                   float angle_when_x_low,
+                                                   float angle_when_x_high,
+                                                   float angle_when_y_low,
+                                                   float angle_when_y_high,
+                                                   uint32_t stable_required_ms,
+                                                   float forward_distance_m,
+                                                   float backward_distance_m,
+                                                   float move_speed_mps,
+                                                   float forward_angle_deg,
+                                                   float backward_angle_deg)
+{
+    if (s_vision_fb_phase == 0U) {
+        uint8_t aligned = Vision_XY_PID_Control(vision_x, vision_y, valid,
+                                                center_x, max_x, center_y, max_y,
+                                                deadband_x_px, deadband_y_px,
+                                                kp_x, ki_x, kd_x,
+                                                kp_y, ki_y, kd_y,
+                                                min_speed_mps, max_speed_mps,
+                                                integral_limit_x, integral_limit_y,
+                                                update_period_ms,
+                                                angle_when_x_low, angle_when_x_high,
+                                                angle_when_y_low, angle_when_y_high);
+        uint32_t now = HAL_GetTick();
+
+        if (aligned == 0U) {
+            s_vision_fb_stable_start_tick = 0U;
+            return 0U;
+        }
+
+        if (s_vision_fb_stable_start_tick == 0U) {
+            s_vision_fb_stable_start_tick = now;
+            return 0U;
+        }
+
+        if ((now - s_vision_fb_stable_start_tick) < stable_required_ms) {
+            return 0U;
+        }
+
+        if ((forward_distance_m <= 0.0f) || (backward_distance_m <= 0.0f) || (move_speed_mps <= 0.0f)) {
+            s_vision_fb_phase = 5U;
+            return 1U;
+        }
+
+        uint32_t duration_ms = (uint32_t)((forward_distance_m / move_speed_mps) * 1000.0f + 0.5f);
+        Move_StartTranslateForTime(forward_angle_deg, move_speed_mps, duration_ms);
+        s_vision_fb_phase = 1U;
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 1U) {
+        Move_Update();
+        if (g_motionActive != 0U) {
+            if(duoooooo)
+            {
+                yajun_2();
+                duoooooo=0;
+            }
+            else
+            {
+                guanjun_2();
+            }
+            s_vision_fb_phase = 2U;
+            s_vision_fb_wait_start_tick = HAL_GetTick();
+        }
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 2U) {
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < VISION_YAJUN_ACTION_DELAY_MS) {
+            return 0U;
+        }
+
+        uint32_t duration_ms = (uint32_t)((backward_distance_m / move_speed_mps) * 1000.0f + 0.5f);
+        Move_StartTranslateForTime(backward_angle_deg, move_speed_mps, duration_ms);
+        s_vision_fb_phase = 3U;
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 3U) {
+        Move_Update();
+        if (g_motionActive != 0U) {
+           // guanjun_2();
+            s_vision_fb_phase = 4U;
+            s_vision_fb_wait_start_tick = HAL_GetTick();
+        }
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 4U) {
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) >= VISION_YAJUN_ACTION_DELAY_MS) {
+            s_vision_fb_phase = 5U;
+            return 1U;
+        }
+        return 0U;
+    }
+
+    return 1U;
+}
+
+uint8_t Vision_XY_PID_Then_Forward_Backward3(uint16_t vision_x,
+                                                   uint16_t vision_y,
+                                                   uint8_t valid,
+                                                   uint16_t center_x,
+                                                   uint16_t max_x,
+                                                   uint16_t center_y,
+                                                   uint16_t max_y,
+                                                   uint16_t deadband_x_px,
+                                                   uint16_t deadband_y_px,
+                                                   float kp_x,
+                                                   float ki_x,
+                                                   float kd_x,
+                                                   float kp_y,
+                                                   float ki_y,
+                                                   float kd_y,
+                                                   float min_speed_mps,
+                                                   float max_speed_mps,
+                                                   float integral_limit_x,
+                                                   float integral_limit_y,
+                                                   uint32_t update_period_ms,
+                                                   float angle_when_x_low,
+                                                   float angle_when_x_high,
+                                                   float angle_when_y_low,
+                                                   float angle_when_y_high,
+                                                   uint32_t stable_required_ms,
+                                                   float forward_distance_m,
+                                                   float backward_distance_m,
+                                                   float move_speed_mps,
+                                                   float forward_angle_deg,
+                                                   float backward_angle_deg)
+{
+    if (s_vision_fb_phase == 0U) {
+        uint8_t aligned = Vision_XY_PID_Control(vision_x, vision_y, valid,
+                                                center_x, max_x, center_y, max_y,
+                                                deadband_x_px, deadband_y_px,
+                                                kp_x, ki_x, kd_x,
+                                                kp_y, ki_y, kd_y,
+                                                min_speed_mps, max_speed_mps,
+                                                integral_limit_x, integral_limit_y,
+                                                update_period_ms,
+                                                angle_when_x_low, angle_when_x_high,
+                                                angle_when_y_low, angle_when_y_high);
+        uint32_t now = HAL_GetTick();
+
+        if (aligned == 0U) {
+            s_vision_fb_stable_start_tick = 0U;
+            return 0U;
+        }
+
+        if (s_vision_fb_stable_start_tick == 0U) {
+            s_vision_fb_stable_start_tick = now;
+            return 0U;
+        }
+
+        if ((now - s_vision_fb_stable_start_tick) < stable_required_ms) {
+            return 0U;
+        }
+
+        if ((forward_distance_m <= 0.0f) || (backward_distance_m <= 0.0f) || (move_speed_mps <= 0.0f)) {
+            s_vision_fb_phase = 5U;
+            return 1U;
+        }
+
+        uint32_t duration_ms = (uint32_t)((forward_distance_m / move_speed_mps) * 1000.0f + 0.5f);
+        Move_StartTranslateForTime(forward_angle_deg, move_speed_mps, duration_ms);
+        s_vision_fb_phase = 1U;
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 1U) {
+        Move_Update();
+        if (g_motionActive != 0U) {
+            guanjun_2();
+            s_vision_fb_phase = 2U;
+            s_vision_fb_wait_start_tick = HAL_GetTick();
+        }
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 2U) {
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < VISION_YAJUN_ACTION_DELAY_MS) {
+            return 0U;
+        }
+
+        uint32_t duration_ms = (uint32_t)((backward_distance_m / move_speed_mps) * 1000.0f + 0.5f);
+        Move_StartTranslateForTime(backward_angle_deg, move_speed_mps, duration_ms);
+        s_vision_fb_phase = 3U;
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 3U) {
+        Move_Update();
+        if (g_motionActive != 0U) {
+            yajun_2();
+            s_vision_fb_phase = 4U;
+            s_vision_fb_wait_start_tick = HAL_GetTick();
+        }
+        return 0U;
+    }
+
+    if (s_vision_fb_phase == 4U) {
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) >= VISION_YAJUN_ACTION_DELAY_MS) {
+            s_vision_fb_phase = 5U;
+            return 1U;
+        }
+        return 0U;
+    }
+
+    return 1U;
+}
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
@@ -549,12 +833,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	__HAL_DMA_DISABLE_IT(&hdma_uart5_rx, DMA_IT_HT);
 	if(huart==&huart4)
 	{
-	static uint8_t uart4_hello[] = "hello";
-	HAL_UART_Transmit_DMA(&huart4, uart4_hello, sizeof(uart4_hello) - 1U);
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart4,rxBuffer4,sizeof(rxBuffer4));
-
 	}
-	__HAL_DMA_DISABLE_IT(&hdma_uart4_rx, DMA_IT_HT);
 	if(huart == &huart1)
     {
         Vision_ParseNewFrame(rxBuffer2, Size);
@@ -646,14 +925,22 @@ int main(void)
     HAL_Delay(DUOJI_BOOT_SETTLE_DELAY_MS);
     duoji_Turntable_Set_Start_Position();
     HAL_Delay(DUOJI_BOOT_REHOME_DELAY_MS);
+    duoji_tc();
+
     // 启动UART DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1,rxBuffer2,sizeof(rxBuffer2));
 	__HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);
-	
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart4,rxBuffer4,sizeof(rxBuffer4));
+
+    txBuffer2[0] = 0xAA;
+    txBuffer2[1] = 0x00;
+    txBuffer2[2] = 0x02;
+    txBuffer2[3] = 0x55;
+    vision_current_cmd = txBuffer2[2];
+    HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
+	    
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart4,rxBuffer4,sizeof(rxBuffer4));
 	__HAL_DMA_DISABLE_IT(&hdma_uart4_rx,DMA_IT_HT);
-	
-	//HAL_UARTEx_ReceiveToIdle_DMA(&huart5,rxBuffer5,sizeof(rxBuffer5));
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart5,rxBuffer5,sizeof(rxBuffer5));
 	__HAL_DMA_DISABLE_IT(&hdma_uart5_rx,DMA_IT_HT);
 	
 	// HAL_UARTEx_ReceiveToIdle_DMA(&huart2,rxBuffer2,sizeof(rxBuffer2));
@@ -714,19 +1001,16 @@ int main(void)
     // duoji_Set_ID2_Angle(170);
     // HAL_Delay(3000);
     // //舵机恢复转盘转动模式
-    duoji_Set_ID1_Angle(-2);
-    HAL_Delay(1);
-    duoji_Set_ID2_Angle(0);
-    HAL_Delay(300);
+
     //task1_1_step2();
    // duoji_Turntable_MoveToAngle720(720.0f);
    // duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
 //   Emm_V5_MMCL_Pos_Control(1, 1, 100, 30, 1600, false, true);
 //   Emm_V5_MMCL_Pos_Control(4, 0, 100, 30, 1600, false, true);
-//   Emm_V5_Multi_Motor_Cmd_UART5(0); HAL_Delay(1); 
+//  Emm_V5_Multi_Motor_Cmd_UART5(0); HAL_Delay(1);
 //   Emm_V5_MMCL_Pos_Control(2, 1,100, 30,1600, false, true);
 //   Emm_V5_MMCL_Pos_Control(3, 0, 100, 30,1600, false, true);
-//   Emm_V5_Multi_Motor_Cmd_UART4(0); 
+//   Emm_V5_Multi_Motor_Cmd_UART4(0);
 stat=1;
 
 HAL_Delay(1);
@@ -734,6 +1018,7 @@ HAL_Delay(1);
 // Move_StartTranslateForTime(225,0.3, 1000);
   while (1)
   { 
+
 //HAL_UART_Transmit_DMA(&huart4, uart4_hello, sizeof(uart4_hello) - 1U);
 //HAL_Delay(1000);
     // uint16_t vision_x = 0U;
@@ -741,22 +1026,22 @@ HAL_Delay(1);
 	// uint8_t vision_valid = 0U;
 
 	//  // Vision_XY_PID_Then_Forward_Backward_Reset();
-	// 	vision_valid = get_vision_xy(&vision_x, &vision_y, 1280U, 960U);
+	// 	vision_valid = get_vision_xy(&vision_x, &vision_y, 960U, 720U);
 	// 	if(Vision_XY_PID_Then_Forward_Backward(vision_x, vision_y, vision_valid,
-											//    640U, 1280U,
-											//    480U, 960U,
-											//    7U, 7U,
-											//    0.00060f, 0.00000f, 0.00025f,
-											//    0.00060f, 0.00000f, 0.00025f,
-											//    0.03f, 0.14f,
-											//    400.0f, 400.0f,
-											//    15U,
-											//    90.0f, 270.0f,
-											//    0.0f, 180.0f,
-											//    200U,
-											//    0.122f, 0.200f,
-											//    0.20f,
-											//    0.0f, 180.0f))
+	// 										   526U, 960U,
+	// 										   360U, 720U,
+	// 										   2U, 2U,
+	// 										   0.0008f, 0.00000f, 0.00000f,
+	// 										   0.0008f, 0.00000f, 0.00000f,
+	// 										   0.01f, 0.14f,
+	// 										   400.0f, 400.0f,
+	// 										   15U,
+	// 										   90.0f, 270.0f,
+	// 										   0.0f, 180.0f,
+	// 										   200U,
+	// 										   0.1775f, 0.200f,
+	// 										   0.20f,
+	// 										   0.0f, 180.0f))
 	// 	{
 	// 		break;
 	// 	}
@@ -780,9 +1065,11 @@ HAL_Delay(1);
     //                                       0.11f, 0.11f,
     //                                       0.20f,
     //                                       0.0f, 180.0f);
-    //State();
-    // XUNji();
-    //   HAL_Delay(5);
+   State();
+//    float gray1 = Gray_Trace_Get_Dir();
+    //  XUNji();
+     
+      //HAL_Delay(5);
     // task1_2_finish();
     //   int QR=2;
 	// 	switch(QR)

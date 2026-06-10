@@ -338,7 +338,7 @@ void duoji_Turntable_Reset(void)
 void duoji_Turntable_Set_Start_Position(void)
 {
     duoji_Turntable_Ensure_Position_Mode();
-    duoji_Control(TURNTABLE_duoji_ID, 515, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Control(TURNTABLE_duoji_ID, 804, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 
 void duoji_Turntable_Sync_Start_Position(void)
@@ -417,7 +417,7 @@ void task2_1_step1(void)
 }
 void task2_1_step2(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 410, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task2_1_step3(void)
 {
@@ -434,6 +434,41 @@ void task2_2_step2(void)
 void task2_2_step3(void)
 {
     duoji_Turntable_Rotate(duoji_TURNTABLE_CW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+}
+void duoji_tc()
+{
+    duoji_Set_ID1_Angle(-115);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(17); //正值向上抬升 
+    HAL_Delay(1);
+}
+void yajun_1()
+{
+    duoji_Set_ID1_Angle(-85);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(56); //正值向上抬升 
+    HAL_Delay(1);
+}
+void yajun_2()
+{
+    duoji_Set_ID1_Angle(-93);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(25); //正值向上抬升 
+    HAL_Delay(1);
+}
+void guanjun_1()
+{
+    duoji_Set_ID1_Angle(-68);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(71); //正值向上抬升 
+    HAL_Delay(1);
+}
+void guanjun_2()
+{
+    duoji_Set_ID1_Angle(-65);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(45); //正值向上抬升 
+    HAL_Delay(1);
 }
 volatile uint32_t timer2_tick_count = 0; 
 #define TARGET_20S_COUNT  2000  

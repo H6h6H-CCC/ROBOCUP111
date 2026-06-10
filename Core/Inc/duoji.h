@@ -106,6 +106,7 @@ void duoji_Set_ID2_Angle(float angle_deg);
 void duoji_Set_ID1_Angle_Time(float angle_deg, uint16_t time);
 void duoji_Set_ID2_Angle_Time(float angle_deg, uint16_t time);
 
+
 /* 参考 duoji.c 的转盘模式函数 */
 void task1_1_step1(void);
 void task1_1_step2(void);
@@ -125,5 +126,10 @@ void task2_1_step3(void);
 void task2_2_step1(void);
 void task2_2_step2(void);
 void task2_2_step3(void);
+void duoji_tc();
+void yajun_1();
+void yajun_2();
+void guanjun_1();
+void guanjun_2();
 #endif /* __duoji_H */
 
