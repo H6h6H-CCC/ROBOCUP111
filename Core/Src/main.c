@@ -51,7 +51,7 @@
 #define DUOJI_BOOT_SETTLE_DELAY_MS 50U
 #define DUOJI_BOOT_REHOME_DELAY_MS 450U
 #define VISION_DEBUG_PRINT_PERIOD_MS 200U
-#define VISION_YAJUN_ACTION_DELAY_MS 1700U
+#define VISION_YAJUN_ACTION_DELAY_MS 600
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -936,7 +936,7 @@ int main(void)
     txBuffer2[2] = 0x02;
     txBuffer2[3] = 0x55;
     vision_current_cmd = txBuffer2[2];
-    HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
+    //HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
 	    
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart4,rxBuffer4,sizeof(rxBuffer4));
 	__HAL_DMA_DISABLE_IT(&hdma_uart4_rx,DMA_IT_HT);
@@ -1028,7 +1028,7 @@ HAL_Delay(1);
 	//  // Vision_XY_PID_Then_Forward_Backward_Reset();
 	// 	vision_valid = get_vision_xy(&vision_x, &vision_y, 960U, 720U);
 	// 	if(Vision_XY_PID_Then_Forward_Backward(vision_x, vision_y, vision_valid,
-	// 										   526U, 960U,
+	// 										   522U, 960U,
 	// 										   360U, 720U,
 	// 										   2U, 2U,
 	// 										   0.0008f, 0.00000f, 0.00000f,
@@ -1039,8 +1039,8 @@ HAL_Delay(1);
 	// 										   90.0f, 270.0f,
 	// 										   0.0f, 180.0f,
 	// 										   200U,
-	// 										   0.1775f, 0.200f,
-	// 										   0.20f,
+	// 										   0.1575f, 0.0f,
+	// 										   0.15f,
 	// 										   0.0f, 180.0f))
 	// 	{
 	// 		break;

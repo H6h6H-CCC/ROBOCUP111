@@ -3,10 +3,16 @@
 
 #define TURNTABLE_duoji_ID            3U
 #define TURNTABLE_PWM_CENTER          duoji_PWM_MID
-#define TURNTABLE_PWM_START_POSITION  duoji_PWM_MIN
+#define TURNTABLE_PWM_START_POSITION  804U
 #define TURNTABLE_PWM_STEP_72_DEG     400U
 #define TURNTABLE_PWM_STEP_36_DEG     200U
 #define TURNTABLE_DEFAULT_MOVE_TIME   450U
+#define TURNTABLE_PWM_TRAVEL_RANGE    (duoji_PWM_MAX - duoji_PWM_MIN)
+#define TURNTABLE_OUTPUT_BALL_COUNT   5U
+#define TURNTABLE_SECOND_BALL_COUNT   3U
+#define TURNTABLE_SECOND_BALL1_PWM    1614U
+#define TURNTABLE_SECOND_BALL2_PWM    1214U
+#define TURNTABLE_SECOND_BALL3_PWM    814U
 #define duoji_ID1                     1U
 #define duoji_ID2                     2U
 #define duoji_ID1_ZERO_PWM            1900U
@@ -19,6 +25,7 @@ uint16_t Sid[3]={0,1,2};
 uint16_t Spwm[3]={2200,2200,2200};
 uint16_t Stime[3]={1000,1000,1000};
 static uint16_t g_turntable_current_pwm = TURNTABLE_PWM_CENTER;
+static duoji_TurntableDir_t g_turntable_output_preferred_dir = duoji_TURNTABLE_CW;
 
 static HAL_StatusTypeDef UART3_DMA_Send(const uint8_t *data, uint16_t len)
 {
@@ -84,11 +91,107 @@ static void duoji_Turntable_Rotate(duoji_TurntableDir_t dir, uint16_t pwm_delta,
     duoji_Control(TURNTABLE_duoji_ID, duoji_Clamp_PWM(target_pwm), time);
 }
 
+static uint16_t duoji_Turntable_Get_Output_Target_PWM(uint8_t ball_number)
+{
+    if (ball_number < 1U)
+    {
+        ball_number = 1U;
+    }
+    else if (ball_number > TURNTABLE_OUTPUT_BALL_COUNT)
+    {
+        ball_number = TURNTABLE_OUTPUT_BALL_COUNT;
+    }
+
+    return (uint16_t)(TURNTABLE_PWM_START_POSITION +
+                      ((ball_number - 1U) * TURNTABLE_PWM_STEP_72_DEG));
+}
+
+static uint16_t duoji_Turntable_Get_Second_Output_Target_PWM(uint8_t ball_number)
+{
+    switch (ball_number)
+    {
+    case 1U:
+        return TURNTABLE_SECOND_BALL1_PWM;
+    case 2U:
+        return TURNTABLE_SECOND_BALL2_PWM;
+    case 3U:
+        return TURNTABLE_SECOND_BALL3_PWM;
+    default:
+        return TURNTABLE_SECOND_BALL1_PWM;
+    }
+}
+
+static uint16_t duoji_Turntable_Get_CW_Delta(uint16_t current_pwm, uint16_t target_pwm)
+{
+    if (current_pwm >= target_pwm)
+    {
+        return (uint16_t)(current_pwm - target_pwm);
+    }
+
+    return (uint16_t)(TURNTABLE_PWM_TRAVEL_RANGE - (target_pwm - current_pwm));
+}
+
+static uint16_t duoji_Turntable_Get_CCW_Delta(uint16_t current_pwm, uint16_t target_pwm)
+{
+    if (target_pwm >= current_pwm)
+    {
+        return (uint16_t)(target_pwm - current_pwm);
+    }
+
+    return (uint16_t)(TURNTABLE_PWM_TRAVEL_RANGE - (current_pwm - target_pwm));
+}
+
+static uint8_t duoji_Turntable_Can_Reach(uint16_t current_pwm, duoji_TurntableDir_t dir, uint16_t pwm_delta)
+{
+    if (dir == duoji_TURNTABLE_CW)
+    {
+        return (pwm_delta <= (uint16_t)(current_pwm - duoji_PWM_MIN)) ? 1U : 0U;
+    }
+
+    return (pwm_delta <= (uint16_t)(duoji_PWM_MAX - current_pwm)) ? 1U : 0U;
+}
+
+static duoji_TurntableDir_t duoji_Turntable_Select_Output_Direction(uint16_t target_pwm, uint16_t *pwm_delta)
+{
+    uint16_t cw_delta = duoji_Turntable_Get_CW_Delta(g_turntable_current_pwm, target_pwm);
+    uint16_t ccw_delta = duoji_Turntable_Get_CCW_Delta(g_turntable_current_pwm, target_pwm);
+    uint8_t cw_reachable = duoji_Turntable_Can_Reach(g_turntable_current_pwm, duoji_TURNTABLE_CW, cw_delta);
+    uint8_t ccw_reachable = duoji_Turntable_Can_Reach(g_turntable_current_pwm, duoji_TURNTABLE_CCW, ccw_delta);
+
+    if ((cw_reachable != 0U) && (ccw_reachable != 0U))
+    {
+        if (cw_delta < ccw_delta)
+        {
+            *pwm_delta = cw_delta;
+            return duoji_TURNTABLE_CW;
+        }
+
+        if (ccw_delta < cw_delta)
+        {
+            *pwm_delta = ccw_delta;
+            return duoji_TURNTABLE_CCW;
+        }
+
+        *pwm_delta = cw_delta;
+        return g_turntable_output_preferred_dir;
+    }
+
+    if (cw_reachable != 0U)
+    {
+        *pwm_delta = cw_delta;
+        return duoji_TURNTABLE_CW;
+    }
+
+    *pwm_delta = ccw_delta;
+    return duoji_TURNTABLE_CCW;
+}
+
 /* 舵机初始化：启动串口3 DMA */
 void duoji_Init(void)
 {
     memset(duoji_Cmd_Buf, 0, duoji_CMD_BUF_SIZE);
     g_turntable_current_pwm = TURNTABLE_PWM_CENTER;
+    g_turntable_output_preferred_dir = duoji_TURNTABLE_CW;
 
     (void)HAL_UART_DMAStop(&huart3);
     huart3.Init.BaudRate = DUOJI_UART_BAUD;
@@ -333,18 +436,67 @@ void duoji_Turntable_Reset(void)
 {
     duoji_Turntable_Ensure_Position_Mode();
     duoji_Control(TURNTABLE_duoji_ID, TURNTABLE_PWM_CENTER, TURNTABLE_DEFAULT_MOVE_TIME);
+    g_turntable_output_preferred_dir = duoji_TURNTABLE_CW;
 }
 
 void duoji_Turntable_Set_Start_Position(void)
 {
     duoji_Turntable_Ensure_Position_Mode();
-    duoji_Control(TURNTABLE_duoji_ID, 804, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Control(TURNTABLE_duoji_ID, TURNTABLE_PWM_START_POSITION, 1000);
+    g_turntable_output_preferred_dir = duoji_TURNTABLE_CW;
 }
 
 void duoji_Turntable_Sync_Start_Position(void)
 {
     /* Software-only sync: this does not send a UART command to the servo. */
     g_turntable_current_pwm = TURNTABLE_PWM_START_POSITION;
+    g_turntable_output_preferred_dir = duoji_TURNTABLE_CW;
+}
+
+void output_ball_alternating(uint8_t ball_number)
+{
+    uint16_t target_pwm = 0U;
+    uint16_t pwm_delta = 0U;
+    duoji_TurntableDir_t dir = duoji_TURNTABLE_CW;
+
+    if ((ball_number < 1U) || (ball_number > TURNTABLE_OUTPUT_BALL_COUNT))
+    {
+        return;
+    }
+
+    target_pwm = duoji_Turntable_Get_Output_Target_PWM(ball_number);
+
+    if (target_pwm == g_turntable_current_pwm)
+    {
+        return;
+    }
+
+    dir = duoji_Turntable_Select_Output_Direction(target_pwm, &pwm_delta);
+    duoji_Turntable_Rotate(dir, pwm_delta, TURNTABLE_DEFAULT_MOVE_TIME);
+    g_turntable_output_preferred_dir = dir;
+}
+
+void output_ball_alternating_second(uint8_t ball_number)
+{
+    uint16_t target_pwm = 0U;
+    uint16_t pwm_delta = 0U;
+    duoji_TurntableDir_t dir = duoji_TURNTABLE_CW;
+
+    if ((ball_number < 1U) || (ball_number > TURNTABLE_SECOND_BALL_COUNT))
+    {
+        return;
+    }
+
+    target_pwm = duoji_Turntable_Get_Second_Output_Target_PWM(ball_number);
+
+    if (target_pwm == g_turntable_current_pwm)
+    {
+        return;
+    }
+
+    dir = duoji_Turntable_Select_Output_Direction(target_pwm, &pwm_delta);
+    duoji_Turntable_Rotate(dir, pwm_delta, TURNTABLE_DEFAULT_MOVE_TIME);
+    g_turntable_output_preferred_dir = dir;
 }
 
 void duoji_Set_ID1_Angle(float angle_deg)

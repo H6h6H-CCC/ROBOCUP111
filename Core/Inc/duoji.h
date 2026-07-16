@@ -99,6 +99,8 @@ void duoji_Turntable_Sync_Current_PWM(uint16_t pwm);
 void duoji_Turntable_Reset(void);
 void duoji_Turntable_Set_Start_Position(void);
 void duoji_Turntable_Sync_Start_Position(void);
+void output_ball_alternating(uint8_t ball_number);
+void output_ball_alternating_second(uint8_t ball_number);
 
 /* 舵机1/2角度控制API */
 void duoji_Set_ID1_Angle(float angle_deg);

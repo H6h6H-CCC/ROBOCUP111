@@ -64,7 +64,7 @@ void GetTask1SequenceHexArray(void)
 		int tens = QRPacke1[0] - '0';   // ʮλ
     	int units = QRPacke1[1] - '0';  // λ
     	QR= tens * 10 + units;
-		QR=2;
+		QR=1;
 		switch(QR)
 		{
 			case 1:  outLetter[0]='a'; outLetter[1]='b'; outLetter[2]='c';
