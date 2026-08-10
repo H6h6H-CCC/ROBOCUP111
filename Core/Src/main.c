@@ -52,6 +52,8 @@
 #define DUOJI_BOOT_REHOME_DELAY_MS 450U
 #define VISION_DEBUG_PRINT_PERIOD_MS 200U
 #define VISION_YAJUN_ACTION_DELAY_MS 600
+#define JY61P_RX_BUFFER_SIZE 64U
+#define JY61P_DEBUG_PRINT_PERIOD_MS 1000U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -79,6 +81,9 @@ uint8_t txBuffer2[10];
 uint8_t rxBuffer3[100];
 uint8_t rxBuffer4[256];
 uint8_t rxBuffer5[256];
+/* 修改：USART6 专用于接收 JY61P 连续数据流。 */
+static uint8_t jy61p_rx_buffer[JY61P_RX_BUFFER_SIZE];
+static uint8_t jy61p_debug_tx[160];
 uint8_t QRPacke[2];
 uint8_t QRPacke1[2];
 uint8_t Coulor[5];
@@ -195,7 +200,56 @@ static void Vision_SendParsedDebug(uint8_t type, uint32_t qr_num, uint8_t color_
     }
 
     if ((len > 0) && (len < (int)sizeof(vision_debug_tx))) {
+        /* 修改：恢复视觉解析调试输出，发送到 USART2。 */
         HAL_UART_Transmit_DMA(&huart2, vision_debug_tx, (uint16_t)len);
+    }
+}
+
+static void JY61P_FormatCenti(char *output, uint16_t output_size, float value)
+{
+    int32_t scaled = (int32_t)(value * 100.0f + ((value >= 0.0f) ? 0.5f : -0.5f));
+    uint32_t magnitude = (scaled < 0) ? (uint32_t)(-scaled) : (uint32_t)scaled;
+
+    snprintf(output, output_size, "%s%lu.%02lu",
+             (scaled < 0) ? "-" : "",
+             (unsigned long)(magnitude / 100U),
+             (unsigned long)(magnitude % 100U));
+}
+
+/* 修改：陀螺仪调试输出当前停用，保留函数供后续恢复。 */
+static void __attribute__((unused)) JY61P_SendDebug(void)
+{
+    static uint32_t last_print_tick = 0U;
+    char ax[16], ay[16], az[16];
+    char wx[16], wy[16], wz[16];
+    char roll[16], pitch[16], yaw[16], temperature[16];
+    uint32_t now = HAL_GetTick();
+    int len;
+
+    if (((now - last_print_tick) < JY61P_DEBUG_PRINT_PERIOD_MS) ||
+        (lastPacketTime == 0U) ||
+        (huart2.gState != HAL_UART_STATE_READY)) {
+        return;
+    }
+
+    last_print_tick = now;
+    JY61P_FormatCenti(ax, sizeof(ax), sensorData.ax);
+    JY61P_FormatCenti(ay, sizeof(ay), sensorData.ay);
+    JY61P_FormatCenti(az, sizeof(az), sensorData.az);
+    JY61P_FormatCenti(wx, sizeof(wx), sensorData.wx);
+    JY61P_FormatCenti(wy, sizeof(wy), sensorData.wy);
+    JY61P_FormatCenti(wz, sizeof(wz), sensorData.wz);
+    JY61P_FormatCenti(roll, sizeof(roll), sensorData.roll);
+    JY61P_FormatCenti(pitch, sizeof(pitch), sensorData.pitch);
+    JY61P_FormatCenti(yaw, sizeof(yaw), sensorData.yaw);
+    JY61P_FormatCenti(temperature, sizeof(temperature), sensorData.temperature);
+
+    len = snprintf((char *)jy61p_debug_tx, sizeof(jy61p_debug_tx),
+                   "IMU,ACC=%s,%s,%s,GYRO=%s,%s,%s,ANGLE=%s,%s,%s,TEMP=%s\r\n",
+                   ax, ay, az, wx, wy, wz, roll, pitch, yaw, temperature);
+
+    if ((len > 0) && (len < (int)sizeof(jy61p_debug_tx))) {
+        HAL_UART_Transmit_DMA(&huart2, jy61p_debug_tx, (uint16_t)len);
     }
 }
 
@@ -331,6 +385,7 @@ static void Debug_PrintVisionXY(uint16_t vision_x, uint16_t vision_y, uint8_t va
     }
 
     last_print_tick = now;
+    /* 修改：恢复视觉坐标调试输出。 */
     printf("vision valid=%u x=%u y=%u\r\n",
            (unsigned int)valid,
            (unsigned int)vision_x,
@@ -824,6 +879,19 @@ uint8_t Vision_XY_PID_Then_Forward_Backward3(uint16_t vision_x,
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
 	(void)Size;
+	if (huart == &huart6)
+	{
+		/* 修改：解析 USART6 收到的全部 JY61P 字节，并立即恢复空闲 DMA 接收。 */
+		for (uint16_t i = 0U; i < Size; i++)
+		{
+			ProcessReceivedData(jy61p_rx_buffer[i]);
+		}
+		HAL_UARTEx_ReceiveToIdle_DMA(&huart6, jy61p_rx_buffer, sizeof(jy61p_rx_buffer));
+		__HAL_DMA_DISABLE_IT(&hdma_usart6_rx, DMA_IT_HT);
+		/* 修改：陀螺仪数据输出暂时注释，仅保留 USART6 接收与解析。 */
+		// JY61P_SendDebug();
+		return;
+	}
 	if(huart==&huart5)
 	{
 	//HAL_UART_Transmit_DMA(&huart5,rxBuffer5,Size);
@@ -919,6 +987,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_TIM3_Init();
+  MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
     g_debug_io_mode = 1U;
     duoji_Init();
@@ -933,10 +1002,10 @@ int main(void)
 
     txBuffer2[0] = 0xAA;
     txBuffer2[1] = 0x00;
-    txBuffer2[2] = 0x02;
+    txBuffer2[2] = 0x00;
     txBuffer2[3] = 0x55;
     vision_current_cmd = txBuffer2[2];
-    //HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
+    HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
 	    
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart4,rxBuffer4,sizeof(rxBuffer4));
 	__HAL_DMA_DISABLE_IT(&hdma_uart4_rx,DMA_IT_HT);
@@ -946,9 +1015,12 @@ int main(void)
 	// HAL_UARTEx_ReceiveToIdle_DMA(&huart2,rxBuffer2,sizeof(rxBuffer2));
 	// __HAL_DMA_DISABLE_IT(&hdma_usart2_rx,DMA_IT_HT);
 	
-    // 传感器初始化配置
+	/* 修改：USART6 通过空闲中断 DMA 连续接收 JY61P 数据。 */
+	HAL_UARTEx_ReceiveToIdle_DMA(&huart6, jy61p_rx_buffer, sizeof(jy61p_rx_buffer));
+	__HAL_DMA_DISABLE_IT(&hdma_usart6_rx, DMA_IT_HT);
+
+	// 传感器初始化配置
 	//HAL_TIM_Base_Start_IT(&htim8);
-    //JY61P_InitConfig();
     HAL_Delay(100);  // 等待100ms
   /* USER CODE END 2 */
 
@@ -1018,7 +1090,7 @@ HAL_Delay(1);
 // Move_StartTranslateForTime(225,0.3, 1000);
   while (1)
   { 
-
+    State();
 //HAL_UART_Transmit_DMA(&huart4, uart4_hello, sizeof(uart4_hello) - 1U);
 //HAL_Delay(1000);
     // uint16_t vision_x = 0U;
@@ -1065,7 +1137,7 @@ HAL_Delay(1);
     //                                       0.11f, 0.11f,
     //                                       0.20f,
     //                                       0.0f, 180.0f);
-   State();
+  // State();
 //    float gray1 = Gray_Trace_Get_Dir();
     //  XUNji();
      

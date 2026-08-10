@@ -91,20 +91,21 @@ void JY61P_CalibrateAccel(void)
 void JY61P_Unlock(void)
 {
     uint8_t unlockCmd[] = {0xFF, 0xAA, 0x69, 0x88, 0xB5};
-    HAL_UART_Transmit(&huart3, unlockCmd, sizeof(unlockCmd), 100);
+    /* 修改：JY61P 已迁移到 USART6，USART3 继续专用于舵机总线。 */
+    HAL_UART_Transmit(&huart6, unlockCmd, sizeof(unlockCmd), 100);
     HAL_Delay(200);
 }
 
 void JY61P_Save(void)
 {
     uint8_t saveCmd[] = {0xFF, 0xAA, 0x00, 0x00, 0x00};
-    HAL_UART_Transmit(&huart3, saveCmd, sizeof(saveCmd), 100);
+    HAL_UART_Transmit(&huart6, saveCmd, sizeof(saveCmd), 100);
 }
 
 void JY61P_WriteRegister(uint8_t addr, int16_t data)
 {
     uint8_t cmd[5] = {0xFF, 0xAA, addr, (uint8_t)(data & 0xFF), (uint8_t)(data >> 8)};
-    HAL_UART_Transmit(&huart3, cmd, 5, 100);
+    HAL_UART_Transmit(&huart6, cmd, 5, 100);
 }
 
 void JY61P_ReadRegister(uint8_t addr) { /* 如有需要可实现 */ }
@@ -112,7 +113,7 @@ void JY61P_ReadRegister(uint8_t addr) { /* 如有需要可实现 */ }
 void JY61P_RequestData(uint8_t type)
 {
     uint8_t cmd[] = {0xFF, 0xAA, 0x27, type, 0x00};
-    HAL_UART_Transmit(&huart3, cmd, sizeof(cmd), 100);
+    HAL_UART_Transmit(&huart6, cmd, sizeof(cmd), 100);
 }
 
 void JY61P_InitConfig(void)

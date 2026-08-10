@@ -315,19 +315,21 @@ void State(void)
 	switch(stat)
 	{
 		case 1:
-			Move_StartTranslateForTime(225,0.3, 1350);
+			Move_StartTranslateForTime(230,0.3, 1550);
 			while(1)
 			{
 				Move_Update();
 				if(g_motionActive)
 				{
-					Move_StartTranslateForTime(180,0.2, 2250);
+
+					Move_StartTranslateForTime(180,0.3, 1815);
 
 					while(1)
 					{
 						Move_Update();
 						if(g_motionActive)
 						{
+
 							CHANge(1);
 							HAL_Delay(300);
 
