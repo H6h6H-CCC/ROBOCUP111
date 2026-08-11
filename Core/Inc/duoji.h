@@ -130,6 +130,7 @@ void task2_2_step2(void);
 void task2_2_step3(void);
 void duoji_tc();
 void duoji_tc_1();
+void duoji_tc_2();
 void yajun_1();
 void yajun_2();
 void guanjun_1();

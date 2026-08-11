@@ -205,8 +205,8 @@ static void State_RunTimedTranslate(float angle_deg, float velocity_mps, uint32_
 		HAL_Delay(5);
 	}
 }
-//任务一放置函数
-static void State_RunTask1VisionPoint(float forward_distance_m)
+//任务一放置函数；center_x_px 用于调整视觉横向目标位置
+static void State_RunTask1VisionPoint(float forward_distance_m, uint16_t center_x_px)
 {
 	uint16_t vision_x = 0U;
 	uint16_t vision_y = 0U;
@@ -217,7 +217,7 @@ static void State_RunTask1VisionPoint(float forward_distance_m)
 	{
 		vision_valid = get_vision_xy(&vision_x, &vision_y, 960U, 720U);
 		if(Vision_XY_PID_Then_Forward_Backward(vision_x, vision_y, vision_valid,
-											   522U, 960U,
+																   center_x_px, 960U,
 											   360U, 720U,
 											   2U, 2U,
 											   0.0008f, 0.00000f, 0.00000f,
@@ -448,7 +448,7 @@ void State(void)
 				HAL_Delay(5);
 			}
 
-			State_RunTask1VisionPoint(0.16f);
+			State_RunTask1VisionPoint(0.16f, 524U);
 			
 			//set_servo_angle_direction(2U, 36.0f, 1U);
 			
@@ -459,7 +459,7 @@ void State(void)
 			//set_servo_angle_direction(2U, 72.0f, 1U);
 			output_ball_alternating((uint8_t)ball_1[1]);
 			HAL_Delay(500);
-			State_RunTask1VisionPoint(0.16f);
+			State_RunTask1VisionPoint(0.16f, 524U);
 
 
 			
@@ -471,7 +471,7 @@ void State(void)
 			//set_servo_angle_direction(2U, 72.0f, 1U);
 			output_ball_alternating((uint8_t)ball_1[2]);
 			HAL_Delay(500);
-			State_RunTask1VisionPoint(0.16f);
+			State_RunTask1VisionPoint(0.16f, 524U);
 			
 
 			
@@ -481,7 +481,7 @@ void State(void)
 			//set_servo_angle_direction(2U, 72.0f, 1U);
 			output_ball_alternating((uint8_t)ball_1[3]);
 			HAL_Delay(500);
-			State_RunTask1VisionPoint(0.16f);
+			State_RunTask1VisionPoint(0.16f, 524U);
 			
 
 			
@@ -490,7 +490,7 @@ void State(void)
 			//set_servo_angle_direction(2U, 72.0f, 1U);
 			output_ball_alternating((uint8_t)ball_1[4]);
 			HAL_Delay(500);
-			State_RunTask1VisionPoint(0.16f);
+			State_RunTask1VisionPoint(0.16f, 524U);
 			
             duoji_Turntable_Set_Start_Position();
 			GetTask1SequenceHexArray();
@@ -503,7 +503,7 @@ void State(void)
 			break;
 		case 5:
 		//aaa1:
-			Move_StartTranslateForTime(280,0.4,2330);
+			Move_StartTranslateForTime(280,0.4,2350);
 
 			// while(1)
 			// {
@@ -546,7 +546,7 @@ void State(void)
 								case5_turn2=0;
 							}
 						}
-						else if((timnow-timstart)>=2050)
+						else if((timnow-timstart)>=2200)
 						{
 							if(case5_turn1)
 							{
@@ -569,7 +569,7 @@ void State(void)
 			HAL_Delay(300);
 			Move_StopAll();
 			HAL_Delay(300);
-			Move_StartTranslateForTime(103,0.49,2700);	
+			Move_StartTranslateForTime(103,0.49,2650);	
 			yajun_1();			
 			while(1)
 			{
@@ -659,18 +659,20 @@ void State(void)
 						if(g_motionActive)
 						{
 							output_ball_alternating_second((uint8_t)ball_2[1]);
-							State_RunTask2VisionPoint(0.191f); // 第二次放置保持原位置
+							State_RunTask2VisionPoint(0.189f); // 第二次放置保持原位置
 							HAL_Delay(10);
 							Move_StartTranslateForTime(90,0.29,1200);
-							duoji_tc();
+							duoji_tc_2();
 							//Move_StartTranslateForTime(90,0.29,1170);
 							while(1)
 							{
 								Move_Update();
-								if(g_motionActive)
-								{
-									output_ball_alternating_second((uint8_t)ball_2[2]);
-									State_RunTask1VisionPoint(0.16f); // 第三次放置前移2厘米
+				if(g_motionActive)
+				{
+					output_ball_alternating_second((uint8_t)ball_2[2]);
+					// 修改：靠近转盘的 ID1 舵机下降 2°（-122° -> -120°）
+					duoji_Set_ID1_Angle_yajun(-114.0f);
+					State_RunTask1VisionPoint(0.163f, 522U); // 第三次放置前移2厘米
 									HAL_Delay(500);
 					 				goto EXIT_CASE7; 									
 								}

@@ -119,7 +119,7 @@ void Task2_Start(void)
       break;
     }
 
-    Move_StartTranslateForTime(280.0f, 0.7f, 50U);
+    Move_StartTranslateForTime(280.0f, 4.0f, 50U);
     while (1)
     {
       Move_Update();
