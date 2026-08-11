@@ -4,33 +4,34 @@
 #include <math.h>
 
 static KinematicsParam_t g_kinematics_param;
-// È«¾ÖÔË¶¯Ñ§²ÎÊı½á¹¹Ìå
+// å…¨å±€è¿åŠ¨å­¦å‚æ•°ç»“æ„ä½“
 static KinematicsParam_t g_kinematics;
 
-// »úÆ÷ÈË³õÊ¼»¯±êÖ¾
+// æœºå™¨äººåˆå§‹åŒ–æ ‡å¿—
 static bool g_robot_initialized = false;
+static float s_initial_yaw_deg = 0.0f;
 
-// µç»úµØÖ·¶¨Òå
-#define MOTOR_RF 4  // ÓÒÇ°µç»ú
-#define MOTOR_LF 3  // ×óÇ°µç»ú
-#define MOTOR_LB 2  // ×óºóµç»ú
-#define MOTOR_RB 1  // ÓÒºóµç»ú
+// ç”µæœºåœ°å€å®šä¹‰
+#define MOTOR_RF 4  // å³å‰ç”µæœº
+#define MOTOR_LF 3  // å·¦å‰ç”µæœº
+#define MOTOR_LB 2  // å·¦åç”µæœº
+#define MOTOR_RB 1  // å³åç”µæœº
 
 #define MOTOR_DIR_FORWARD_14 1U
 #define MOTOR_DIR_FORWARD_23 0U
 
-// »úĞµ²ÎÊı³£Á¿
+// æœºæ¢°å‚æ•°å¸¸é‡
 #define WHEEL_RADIUS 0.0385f
-#define WHEEL_BASE_LX 0.0950f   // °ëÖá¾à£¨Ç°ºó£©
-#define WHEEL_BASE_LY 0.0800f   // °ëÖá¾à£¨×óÓÒ£©
+#define WHEEL_BASE_LX 0.0950f   // åŠè½´è·ï¼ˆå‰åï¼‰
+#define WHEEL_BASE_LY 0.0800f   // åŠè½´è·ï¼ˆå·¦å³ï¼‰
 #define LAYOUT_SCALE 1.0f
 
-// Ä¬ÈÏÔË¶¯²ÎÊı
+// é»˜è®¤è¿åŠ¨å‚æ•°
 #define DEFAULT_VELOCITY_RPM 500
 #define DEFAULT_ACCELERATION 50
 #define PULSE_PER_REV 3200
 
-// Ë½ÓĞº¯ÊıÉùÃ÷
+// ç§æœ‰å‡½æ•°å£°æ˜
 static void Robot_MoveForward(float velocity, float distance);
 static void Robot_MoveBackward(float velocity, float distance);
 static void Robot_MoveLeft(float velocity, float distance);
@@ -132,6 +133,7 @@ void Move_Init(void)
                  WHEEL_BASE_LX,
                  WHEEL_BASE_LY,
                  LAYOUT_SCALE);
+    s_initial_yaw_deg = sensorData.yaw;
 }
 
 void Move_EnableMotors(bool enable)
@@ -149,7 +151,7 @@ void Move_RotateAngle(float angle_deg, uint8_t direction, uint16_t rpm, uint8_t 
      if (angle_deg <= 0.0f) return;
     if (angle_deg > 360.0f) angle_deg = 360.0f;
 
-    // ÖØĞÂ±ê¶¨µÄ±ÈÀı£º3200Âö³å×ª97¶È => 32.99Âö³å/¶È
+    // é‡æ–°æ ‡å®šçš„æ¯”ä¾‹ï¼š3200è„‰å†²è½¬97åº¦ => 32.99è„‰å†²/åº¦
     #define PULSES_PER_DEGREE (3200.0f / 92.0f)
     uint32_t pulses = (uint32_t)(angle_deg * PULSES_PER_DEGREE + 0.5f);
     if (pulses == 0) return;
@@ -295,6 +297,13 @@ static float NormalizeAngleDeg(float angle_deg)
 
 void Move_RotateToYaw_PID(float target_yaw_deg, float kp, float ki, float kd, uint16_t max_rpm, uint8_t acc, uint32_t timeout_ms)
 {
+    /* ä¿®æ”¹ï¼šé—­ç¯æ—‹è½¬å‰æ¢å¤ USART6 é™€èºä»ªæ¥æ”¶ï¼Œå¹¶ç­‰å¾…ä¸€å¸§æ–°è§’åº¦ã€‚ */
+    JY61P_RxStart();
+    uint32_t wait_start = HAL_GetTick();
+    while ((angleValid == 0U) && ((HAL_GetTick() - wait_start) < 200U))
+    {
+        HAL_Delay(1);
+    }
     float yaw_zero = sensorData.yaw;
 
     uint32_t start = HAL_GetTick();
@@ -353,15 +362,89 @@ void Move_RotateToYaw_PID(float target_yaw_deg, float kp, float ki, float kd, ui
 
         HAL_Delay(10);
     }
+    JY61P_RxStop();
 }
-// ÔË¶¯ÀàĞÍÃ¶¾Ù
+
+void Move_RotateCW_FromInitialYaw(float angle_deg)
+{
+    /* ä¿®æ”¹ï¼šè´Ÿæ•°æ— æ•ˆï¼›0 åº¦è¡¨ç¤ºè¿”å›ä¸Šç”µåˆå§‹ Yawã€‚ */
+    if (angle_deg < 0.0f) {
+        return;
+    }
+
+    JY61P_RxStart();
+    uint32_t wait_start = HAL_GetTick();
+    while ((angleValid == 0U) && ((HAL_GetTick() - wait_start) < 200U))
+    {
+        HAL_Delay(1);
+    }
+
+    uint32_t start = HAL_GetTick();
+    uint32_t last = start;
+    float last_error = 0.0f;
+    const float target_yaw_deg = -angle_deg;
+    const float tol_deg = 0.8f;
+    const float min_rpm = 15.0f;
+
+    while (1)
+    {
+        uint32_t now = HAL_GetTick();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f) {
+            dt = 0.001f;
+        }
+
+        float current_yaw = NormalizeAngleDeg(sensorData.yaw - s_initial_yaw_deg);
+        float error = NormalizeAngleDeg(target_yaw_deg - current_yaw);
+        if (fabsf(error) <= tol_deg)
+        {
+            Move_StopAll();
+            break;
+        }
+
+        float derivative = (error - last_error) / dt;
+        float output = (2.0f * error) + derivative;
+        float rpm_f = fabsf(output);
+        if (rpm_f > 45.0f) {
+            rpm_f = 45.0f;
+        }
+        if (rpm_f < min_rpm) {
+            rpm_f = min_rpm;
+        }
+
+        uint16_t rpm = (uint16_t)rpm_f;
+        uint8_t dir = (output >= 0.0f) ? 1U : 0U;
+        Move_SendAllVelocitySplit(dir, rpm,
+                                  dir, rpm,
+                                  dir, rpm,
+                                  dir, rpm,
+                                  DEFAULT_ACCELERATION);
+
+        last_error = error;
+        last = now;
+
+        if ((now - start) >= 5000U)
+        {
+            Move_StopAll();
+            break;
+        }
+        HAL_Delay(10);
+    }
+    JY61P_RxStop();
+}
+
+void Move_RotateCW90_FromInitialYaw(void)
+{
+    Move_RotateCW_FromInitialYaw(90.0f);
+}
+// è¿åŠ¨ç±»å‹æšä¸¾
 typedef enum {
     MOTION_NONE,
     MOTION_TRANSLATE,
     MOTION_CIRCLE
 } MotionType_t;
 
-// ·Ç×èÈûÔË¶¯×´Ì¬£¨ºÏ²¢£©
+// éé˜»å¡è¿åŠ¨çŠ¶æ€ï¼ˆåˆå¹¶ï¼‰
 static MotionType_t g_currentMotion = MOTION_NONE;
 static float s_moveAngle = 0.0f;
 static float s_moveVelocity = 0.0f;
@@ -370,15 +453,15 @@ static uint8_t s_circleDirection = 0;
 static uint32_t s_motionStartTick = 0;
 static uint32_t s_motionDuration = 0;
 
-// È«¾ÖÔË¶¯×´Ì¬±êÖ¾£¨0=ÔË¶¯ÖĞ£¬1=¿ÕÏĞ£©
-uint8_t g_motionActive = 1;  // ³õÊ¼Îª¿ÕÏĞ
+// å…¨å±€è¿åŠ¨çŠ¶æ€æ ‡å¿—ï¼ˆ0=è¿åŠ¨ä¸­ï¼Œ1=ç©ºé—²ï¼‰
+uint8_t g_motionActive = 1;  // åˆå§‹ä¸ºç©ºé—²
 
 /**
-  * @brief  Æô¶¯·Ç×èÈûÆ½ÒÆÔË¶¯
+  * @brief  å¯åŠ¨éé˜»å¡å¹³ç§»è¿åŠ¨
   */
 
 /**
-  * @brief  Æô¶¯·Ç×èÈûÈÆÈ¦ÔË¶¯
+  * @brief  å¯åŠ¨éé˜»å¡ç»•åœˆè¿åŠ¨
   */
 void Move_StartTranslateForTime(float angle_deg, float velocity_mps, uint32_t duration_ms)
 {
@@ -400,7 +483,7 @@ void Move_StartTranslateForTime(float angle_deg, float velocity_mps, uint32_t du
 }
 
 /**
-  * @brief  Æô¶¯·Ç×èÈûÈÆÈ¦ÔË¶¯
+  * @brief  å¯åŠ¨éé˜»å¡ç»•åœˆè¿åŠ¨
   */
 void Move_StartCircleForTime(float radius, float velocity, uint8_t direction, uint32_t duration_ms)
 {
@@ -424,38 +507,38 @@ void Move_StartCircleForTime(float radius, float velocity, uint8_t direction, ui
 
 
 /**
-  * @brief  Æô¶¯ÏòÖ¸¶¨ÏòÁ¿Î»ÒÆ
+  * @brief  å¯åŠ¨å‘æŒ‡å®šå‘é‡ä½ç§»
   */
 void Move_SpecifyVector(uint8_t place[]){
 	PID_t PID;
 	
-	uint8_t x = 100*(place[0] - '0') + 10*(place[1] - '0') + place[2] - '0';  //xÖá×ø±ê
-	uint8_t y = 100*(place[3] - '0') + 10*(place[4] - '0') + place[5] - '0';  //yÖá×ø±ê
-	float angle_deg = atan2((float)y,(float)x);    //Î»ÒÆ½Ç
+	uint8_t x = 100*(place[0] - '0') + 10*(place[1] - '0') + place[2] - '0';  //xè½´åæ ‡
+	uint8_t y = 100*(place[3] - '0') + 10*(place[4] - '0') + place[5] - '0';  //yè½´åæ ‡
+	float angle_deg = atan2((float)y,(float)x);    //ä½ç§»è§’
 	if(x==0&&y==0){
 		Move_StopAll();
 	}
 	PID.last_error = PID.error;
     PID.error = sqrt(pow(x,2) + pow(y,2));
     float velocity_mps = (PID.Kp * PID.error) + (PID.Ki * PID.integral) +  PID.Kd * (PID.error - PID.last_error);
-	if(velocity_mps>=0.5) velocity_mps = 0.5;  //ÉÏÏŞÏŞ·ù
-	if(velocity_mps<=0.1) velocity_mps = 0.1;  //ÏÂÏŞÏŞ·ù
+	if(velocity_mps>=0.5) velocity_mps = 0.5;  //ä¸Šé™é™å¹…
+	if(velocity_mps<=0.1) velocity_mps = 0.1;  //ä¸‹é™é™å¹…
 	uint32_t duration_ms = PID.error/velocity_mps;
 	Move_StartTranslateForTime(angle_deg,velocity_mps, duration_ms);
 		
 //	while(1){
-//	uint8_t x = 100*(place[0] - '0') + 10*(place[1] - '0') + place[2] - '0';  //xÖá×ø±ê
-//	uint8_t y = 100*(place[3] - '0') + 10*(place[4] - '0') + place[5] - '0';  //yÖá×ø±ê
+//	uint8_t x = 100*(place[0] - '0') + 10*(place[1] - '0') + place[2] - '0';  //xè½´åæ ‡
+//	uint8_t y = 100*(place[3] - '0') + 10*(place[4] - '0') + place[5] - '0';  //yè½´åæ ‡
 //	if(x==0&&y==0){Move_StopAll();	break;}
-//	float angle_deg = atan2((float)y,(float)x);      		   //Î»ÒÆ½Ç
-//	float displacement = sqrt(pow(x,2) + pow(y,2));  		   //Î»ÒÆ¾àÀë
-//	uint32_t duration_ms = displacement/0.2;                   //Î»ÒÆÊ±¼ä
-//	Move_StartTranslateForTime(angle_deg, 0.2, duration_ms);  //¶¨ËÙ¶È0.2m/s
+//	float angle_deg = atan2((float)y,(float)x);      		   //ä½ç§»è§’
+//	float displacement = sqrt(pow(x,2) + pow(y,2));  		   //ä½ç§»è·ç¦»
+//	uint32_t duration_ms = displacement/0.2;                   //ä½ç§»æ—¶é—´
+//	Move_StartTranslateForTime(angle_deg, 0.2, duration_ms);  //å®šé€Ÿåº¦0.2m/s
 //	}
 }
 
 /**
-  * @brief  ¸üĞÂÔË¶¯×´Ì¬£¬ĞèÔÚÖ÷Ñ­»·ÖĞÖÜÆÚĞÔµ÷ÓÃ£¨ÈçÃ¿10ms£©
+  * @brief  æ›´æ–°è¿åŠ¨çŠ¶æ€ï¼Œéœ€åœ¨ä¸»å¾ªç¯ä¸­å‘¨æœŸæ€§è°ƒç”¨ï¼ˆå¦‚æ¯10msï¼‰
   */
 void Move_Update(void)
 {
@@ -463,21 +546,20 @@ void Move_Update(void)
 
     uint32_t now = HAL_GetTick();
     if (now - s_motionStartTick >= s_motionDuration) {
-        // Ê±¼äµ½£¬Æ½»¬Í£Ö¹
+        // æ—¶é—´åˆ°ï¼Œå¹³æ»‘åœæ­¢
         Move_StopAll();
         g_currentMotion = MOTION_NONE;
-        g_motionActive = 1;  // ÔË¶¯½áÊø£¬±äÎª¿ÕÏĞ
+        g_motionActive = 1;  // è¿åŠ¨ç»“æŸï¼Œå˜ä¸ºç©ºé—²
     }
 }
 
 /**
-  * @brief  ²éÑ¯ÔË¶¯ÊÇ·ñ¿ÕÏĞ£¨¿ÕÏĞ·µ»Ø1£¬ÔË¶¯ÖĞ·µ»Ø0£©
+  * @brief  æŸ¥è¯¢è¿åŠ¨æ˜¯å¦ç©ºé—²ï¼ˆç©ºé—²è¿”å›1ï¼Œè¿åŠ¨ä¸­è¿”å›0ï¼‰
   */
 uint8_t Move_IsIdle(void)
 {
     return g_motionActive;
 }
-
 
 
 

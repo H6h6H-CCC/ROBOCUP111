@@ -59,6 +59,9 @@ int16_t BytesToInt16(uint8_t low, uint8_t high);
 void UpdateDisplay(void);
 void IntegrateAcceleration(void);
 void JY61P_CalibrateAccel(void);
+/* USART6 DMA receive control */
+void JY61P_RxStart(void);
+void JY61P_RxStop(void);
 
 #ifdef __cplusplus
 }

@@ -17,7 +17,7 @@
 #define duoji_ID2                     2U
 #define duoji_ID1_ZERO_PWM            1900U
 #define duoji_ID2_ZERO_PWM            2500U
-#define AUX_duoji_DEFAULT_MOVE_TIME   1000U
+#define AUX_duoji_DEFAULT_MOVE_TIME   2000U
 
 /* 全局指令缓冲区 */
 char duoji_Cmd_Buf[duoji_CMD_BUF_SIZE] = {0};
@@ -509,6 +509,26 @@ void duoji_Set_ID2_Angle(float angle_deg)
     duoji_Set_ID2_Angle_Time(angle_deg, AUX_duoji_DEFAULT_MOVE_TIME);
 }
 
+void duoji_Set_ID2_Angle_guanjun(float angle_deg)
+{
+    duoji_Set_ID2_Angle_Time(angle_deg, 900);
+}
+void duoji_Set_ID2_Angle_yajun(float angle_deg)
+{
+    duoji_Set_ID2_Angle_Time(angle_deg, 900);
+}
+void duoji_Set_ID1_Angle_guanjun(float angle_deg)
+{
+    duoji_Set_ID1_Angle_Time(angle_deg, 900);
+}
+void duoji_Set_ID1_Angle_yajun(float angle_deg)
+{
+    duoji_Set_ID1_Angle_Time(angle_deg, 900);
+}
+
+
+
+
 void duoji_Set_ID1_Angle_Time(float angle_deg, uint16_t time)
 {
     int32_t target_pwm = (int32_t)duoji_ID1_ZERO_PWM + duoji_Angle_To_PWM_Delta(angle_deg);
@@ -589,37 +609,44 @@ void task2_2_step3(void)
 }
 void duoji_tc()
 {
-    duoji_Set_ID1_Angle(-115);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle(-118);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
     duoji_Set_ID2_Angle(17); //正值向上抬升 
     HAL_Delay(1);
 }
+void duoji_tc_1()
+{
+    duoji_Set_ID1_Angle(45);//负值向上抬升 靠近转盘的舵机
+    HAL_Delay(1);
+    duoji_Set_ID2_Angle(260); //正值向上抬升 
+    HAL_Delay(1);
+}
 void yajun_1()
 {
-    duoji_Set_ID1_Angle(-85);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle_yajun(-85);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
-    duoji_Set_ID2_Angle(56); //正值向上抬升 
+    duoji_Set_ID2_Angle_yajun(56); //正值向上抬升 
     HAL_Delay(1);
 }
 void yajun_2()
 {
-    duoji_Set_ID1_Angle(-93);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle_yajun(-93);
     HAL_Delay(1);
-    duoji_Set_ID2_Angle(25); //正值向上抬升 
+    duoji_Set_ID2_Angle_yajun(25);
     HAL_Delay(1);
 }
 void guanjun_1()
 {
-    duoji_Set_ID1_Angle(-68);//负值向上抬升 靠近转盘的舵机
+   duoji_Set_ID1_Angle_guanjun(-68);
     HAL_Delay(1);
-    duoji_Set_ID2_Angle(71); //正值向上抬升 
+    duoji_Set_ID2_Angle_guanjun(71); //正值向上抬升 
     HAL_Delay(1);
 }
 void guanjun_2()
 {
-    duoji_Set_ID1_Angle(-65);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle_guanjun(-65);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
-    duoji_Set_ID2_Angle(45); //正值向上抬升 
+    duoji_Set_ID2_Angle_guanjun(45); //正值向上抬升 
     HAL_Delay(1);
 }
 volatile uint32_t timer2_tick_count = 0; 

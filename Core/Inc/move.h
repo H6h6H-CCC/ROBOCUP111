@@ -48,6 +48,8 @@ void Move_RotateAngle(float angle_deg, uint8_t direction, uint16_t rpm, uint8_t 
 
 // 闭环PID控制整车朝向（阻塞式）
 void Move_RotateToYaw_PID(float target_yaw_deg, float kp, float ki, float kd, uint16_t max_rpm, uint8_t acc, uint32_t timeout_ms);
+void Move_RotateCW_FromInitialYaw(float angle_deg);
+void Move_RotateCW90_FromInitialYaw(void);
 
 // 设置单个电机的脉冲数（直接控制）
 // motor_id: 电机ID（1=右后, 2=左后, 3=左前, 4=右前）

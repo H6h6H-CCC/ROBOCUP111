@@ -303,14 +303,16 @@ void State(void)
 {
 	uint16_t vision_x = 0U;
 	uint16_t vision_y = 0U;
-	//goto aaa1;
+	// goto aaa1;
 
 	//CHANge(3);
 	//CHANge(VISION_CMD_QR_TASK1);
 	if(qwqwq)
-	{
+	{		    
+    	duoji_tc();    //降低
 		CHANge(3);
 		qwqwq=0;
+		HAL_Delay(3000);
 	}
 	switch(stat)
 	{
@@ -332,17 +334,20 @@ void State(void)
 
 							CHANge(1);
 							HAL_Delay(300);
-
-							Move_StartTranslateForTime(0,0.4, 3180);
+							Move_StartTranslateForTime(1.1,0.4, 3600);
 							while(1)
 							{
 								Move_Update();
 								if(g_motionActive)
 								{	
 
-									HAL_Delay(500);
+									HAL_Delay(300);
 									CHANge(4);
-									Move_RotateAngle(3,0,30,50);
+									Move_RotateCW_FromInitialYaw(0.0f);
+									HAL_Delay(100);
+									State_RunTimedTranslate(90.0f, 0.5f, 500);
+									Move_RotateCW_FromInitialYaw(7.0f);
+									HAL_Delay(200);
 									GetTask1SequenceHexArray();
 									timstart=HAL_GetTick();
 									while(1)
@@ -421,21 +426,28 @@ void State(void)
 			stat=3;
 			BuildBall1OrderFromQr();
 			HAL_Delay(500);
+
 			break;
 		case 2:
 			break;
 		case 3:
-		//111
+		//111 
 			State_FillTask1Colors();
 			BuildBall1OrderFromQr();
 			//	CHANge(VISION_CMD_CIRCLE);
-
 
 			State_RunTimedTranslate(235.0f, 0.5f, 2530U);
 			State_RunTimedTranslate(0.0f, 0.3f, 500U);
 			HAL_Delay(300);
 			output_ball_alternating((uint8_t)ball_1[0]);
-			HAL_Delay(500);
+			HAL_Delay(200);
+
+			// 修改：未收到有效视觉坐标时持续等待
+			while (get_vision_xy(&vision_x, &vision_y, 960U, 720U) == 0U)
+			{
+				HAL_Delay(5);
+			}
+
 			State_RunTask1VisionPoint(0.16f);
 			
 			//set_servo_angle_direction(2U, 36.0f, 1U);
@@ -452,8 +464,10 @@ void State(void)
 
 			
 			// State_RunTask1VisionPoint1();
-			State_RunTimedTranslate(270.0f, 0.35f, 1300U);
-			State_RunTimedTranslate(16.5f, 0.4f, 2250U);    
+			State_RunTimedTranslate(270.0f, 0.35f, 1500U);
+			Move_RotateCW_FromInitialYaw(135.0f);
+			HAL_Delay(100);
+			State_RunTimedTranslate(7.0f, 0.4f, 2250U);    
 			//set_servo_angle_direction(2U, 72.0f, 1U);
 			output_ball_alternating((uint8_t)ball_1[2]);
 			HAL_Delay(500);
@@ -481,13 +495,15 @@ void State(void)
             duoji_Turntable_Set_Start_Position();
 			GetTask1SequenceHexArray();
 			stat=5;
+			Move_RotateCW_FromInitialYaw(135.0f);
+			HAL_Delay(10);
 			
 			break;
 		case 4:
 			break;
 		case 5:
 		//aaa1:
-			Move_StartTranslateForTime(280,0.4,2370);
+			Move_StartTranslateForTime(280,0.4,2330);
 
 			// while(1)
 			// {
@@ -499,7 +515,8 @@ void State(void)
 				Move_Update();
 				if(g_motionActive)
 				{
-					HAL_Delay(400);
+					Task2_Start();
+					HAL_Delay(200);
 					//Move_RotateAngle(3,1,50,50);
 					//HAL_Delay(200);
 					timstart=HAL_GetTick();
@@ -548,18 +565,21 @@ void State(void)
 		case 6:
 			EXIT_CASE6:
 			//HAL_Delay(500);
-			Move_RotateAngle(90,0,50,50);
-			HAL_Delay(500);
+			Move_RotateCW_FromInitialYaw(90.0f);
+			HAL_Delay(300);
 			Move_StopAll();
-			HAL_Delay(500);
-			Move_StartTranslateForTime(92,0.49,2830);	
-			
+			HAL_Delay(300);
+			Move_StartTranslateForTime(103,0.49,2700);	
 			yajun_1();			
 			while(1)
 			{
 				Move_Update();
 				if(g_motionActive)
 				{
+					Move_RotateCW_FromInitialYaw(90.0f);
+					HAL_Delay(100);
+					// aaa1:
+					// yajun_1();///记得注释！！！！！！！！！！！
 					vision_x = 0U;
 					vision_y = 0U;
 					for(uint8_t i = 0U; i < 6U; i++)
@@ -630,7 +650,7 @@ void State(void)
 					// GetTask1SequenceHexArray();
 					BuildBall2OrderFromQr();
 					output_ball_alternating_second((uint8_t)ball_2[0]);
-					State_RunTask2VisionPoint(0.187f); // 第一次放置后移2厘米
+					State_RunTask2VisionPoint(0.189f); // 第一次放置后移2厘米
 					Move_StartTranslateForTime(90,0.29,1240);
 					guanjun_1();
 					while(1)
@@ -639,7 +659,7 @@ void State(void)
 						if(g_motionActive)
 						{
 							output_ball_alternating_second((uint8_t)ball_2[1]);
-							State_RunTask2VisionPoint(0.193f); // 第二次放置保持原位置
+							State_RunTask2VisionPoint(0.191f); // 第二次放置保持原位置
 							HAL_Delay(10);
 							Move_StartTranslateForTime(90,0.29,1200);
 							duoji_tc();
@@ -650,7 +670,7 @@ void State(void)
 								if(g_motionActive)
 								{
 									output_ball_alternating_second((uint8_t)ball_2[2]);
-									State_RunTask1VisionPoint(0.17f); // 第三次放置前移2厘米
+									State_RunTask1VisionPoint(0.16f); // 第三次放置前移2厘米
 									HAL_Delay(500);
 					 				goto EXIT_CASE7; 									
 								}
@@ -667,7 +687,10 @@ void State(void)
 			stat=7;
 			break;
 		case 7:
-			Move_StartTranslateForTime(190,0.5,4000); 
+			Move_RotateCW_FromInitialYaw(90.0f);
+			HAL_Delay(100);
+			Move_StartTranslateForTime(194,0.5,4000);
+			duoji_tc_1(); 
 			while(1)
 			{
 				Move_Update();

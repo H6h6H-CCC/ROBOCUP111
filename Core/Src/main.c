@@ -51,7 +51,7 @@
 #define DUOJI_BOOT_SETTLE_DELAY_MS 50U
 #define DUOJI_BOOT_REHOME_DELAY_MS 450U
 #define VISION_DEBUG_PRINT_PERIOD_MS 200U
-#define VISION_YAJUN_ACTION_DELAY_MS 600
+#define VISION_YAJUN_ACTION_DELAY_MS 1000
 #define JY61P_RX_BUFFER_SIZE 64U
 #define JY61P_DEBUG_PRINT_PERIOD_MS 1000U
 /* USER CODE END PD */
@@ -84,6 +84,7 @@ uint8_t rxBuffer5[256];
 /* 修改：USART6 专用于接收 JY61P 连续数据流。 */
 static uint8_t jy61p_rx_buffer[JY61P_RX_BUFFER_SIZE];
 static uint8_t jy61p_debug_tx[160];
+static volatile uint8_t jy61p_rx_enabled = 0U;
 uint8_t QRPacke[2];
 uint8_t QRPacke1[2];
 uint8_t Coulor[5];
@@ -200,8 +201,8 @@ static void Vision_SendParsedDebug(uint8_t type, uint32_t qr_num, uint8_t color_
     }
 
     if ((len > 0) && (len < (int)sizeof(vision_debug_tx))) {
-        /* 修改：恢复视觉解析调试输出，发送到 USART2。 */
-        HAL_UART_Transmit_DMA(&huart2, vision_debug_tx, (uint16_t)len);
+        /* 修改：暂时停止将视觉解析结果转发到 USART2。 */
+        // HAL_UART_Transmit_DMA(&huart2, vision_debug_tx, (uint16_t)len);
     }
 }
 
@@ -876,11 +877,40 @@ uint8_t Vision_XY_PID_Then_Forward_Backward3(uint16_t vision_x,
     return 1U;
 }
 
+void JY61P_RxStart(void)
+{
+    jy61p_rx_enabled = 1U;
+    angleValid = 0U;
+    (void)HAL_UART_DMAStop(&huart6);
+    __HAL_UART_CLEAR_IDLEFLAG(&huart6);
+    HAL_NVIC_ClearPendingIRQ(USART6_IRQn);
+    HAL_NVIC_ClearPendingIRQ(DMA2_Stream1_IRQn);
+    HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+    HAL_NVIC_EnableIRQ(USART6_IRQn);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart6, jy61p_rx_buffer, sizeof(jy61p_rx_buffer));
+    __HAL_DMA_DISABLE_IT(&hdma_usart6_rx, DMA_IT_HT);
+}
+
+void JY61P_RxStop(void)
+{
+    jy61p_rx_enabled = 0U;
+    (void)HAL_UART_DMAStop(&huart6);
+    __HAL_UART_DISABLE_IT(&huart6, UART_IT_IDLE | UART_IT_RXNE | UART_IT_PE | UART_IT_ERR);
+    HAL_NVIC_DisableIRQ(USART6_IRQn);
+    HAL_NVIC_DisableIRQ(DMA2_Stream1_IRQn);
+    HAL_NVIC_ClearPendingIRQ(USART6_IRQn);
+    HAL_NVIC_ClearPendingIRQ(DMA2_Stream1_IRQn);
+}
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
 	(void)Size;
 	if (huart == &huart6)
 	{
+		if (jy61p_rx_enabled == 0U)
+		{
+			return;
+		}
 		/* 修改：解析 USART6 收到的全部 JY61P 字节，并立即恢复空闲 DMA 接收。 */
 		for (uint16_t i = 0U; i < Size; i++)
 		{
@@ -994,15 +1024,20 @@ int main(void)
     HAL_Delay(DUOJI_BOOT_SETTLE_DELAY_MS);
     duoji_Turntable_Set_Start_Position();
     HAL_Delay(DUOJI_BOOT_REHOME_DELAY_MS);
-    duoji_tc();
+    //duoji_tc();
+    // duoji_tc_1();  //抬升
+    // HAL_Delay(10000);
+    // while(1)
+    // {
 
+    // }
     // 启动UART DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1,rxBuffer2,sizeof(rxBuffer2));
 	__HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);
 
     txBuffer2[0] = 0xAA;
     txBuffer2[1] = 0x00;
-    txBuffer2[2] = 0x00;
+    txBuffer2[2] = 0x02;
     txBuffer2[3] = 0x55;
     vision_current_cmd = txBuffer2[2];
     HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
@@ -1016,12 +1051,16 @@ int main(void)
 	// __HAL_DMA_DISABLE_IT(&hdma_usart2_rx,DMA_IT_HT);
 	
 	/* 修改：USART6 通过空闲中断 DMA 连续接收 JY61P 数据。 */
-	HAL_UARTEx_ReceiveToIdle_DMA(&huart6, jy61p_rx_buffer, sizeof(jy61p_rx_buffer));
-	__HAL_DMA_DISABLE_IT(&hdma_usart6_rx, DMA_IT_HT);
+	/* 修改：统一通过启停函数管理 USART6 陀螺仪 DMA 接收。 */
+	JY61P_RxStart();
 
 	// 传感器初始化配置
 	//HAL_TIM_Base_Start_IT(&htim8);
-    HAL_Delay(100);  // 等待100ms
+    uint32_t gyro_wait_start = HAL_GetTick();
+    while ((angleValid == 0U) && ((HAL_GetTick() - gyro_wait_start) < 2000U))
+    {
+      HAL_Delay(10);
+    }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -1029,6 +1068,7 @@ int main(void)
 	OLED_Init();
 	//Gray_Trace_GPIO_Init(); 
 	Move_Init();
+	JY61P_RxStop();
   //Gray_Trace_GPIO_Init(); //确保GPIO已初始化
     //uint8_t a='a';
 	//JY61P_CalibrateAccel();
@@ -1085,9 +1125,13 @@ int main(void)
 //   Emm_V5_Multi_Motor_Cmd_UART4(0);
 stat=1;
 
-HAL_Delay(1);
+//HAL_Delay(5000);
+/* 修改：暂时执行一次上电初始 Yaw 闭环转角测试，完成后停在主循环。 */
+//Move_RotateCW_FromInitialYaw(90.0f);
 //Move_StartTranslateForTime(270,0.3, 1000);
 // Move_StartTranslateForTime(225,0.3, 1000);
+duoji_tc();    //降低
+
   while (1)
   { 
     State();

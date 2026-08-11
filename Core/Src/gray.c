@@ -105,3 +105,29 @@ void XUNji(void)
 	  }
 }
 
+// 修改：迁移右移寻线函数；检测到左一（gray = 3.0f）后退出
+extern uint8_t g_motionActive;
+void Task2_Start(void)
+{
+  float gray = Gray_Trace_Get_Dir();
+
+  while (gray < 3.0f)
+  {
+    gray = Gray_Trace_Get_Dir();
+    if (gray >= 3.0f)
+    {
+      break;
+    }
+
+    Move_StartTranslateForTime(280.0f, 0.7f, 50U);
+    while (1)
+    {
+      Move_Update();
+      if (g_motionActive != 0U)
+      {
+        break;
+      }
+    }
+  }
+}
+
