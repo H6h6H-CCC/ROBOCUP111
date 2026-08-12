@@ -935,22 +935,22 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	if(huart == &huart1)
     {
         Vision_ParseNewFrame(rxBuffer2, Size);
-        rxBuffer2[0] = 0U;
+		rxBuffer2[0] = 0U;
         if(rxBuffer2[0] == 0xAA && rxBuffer2[3] == 0x55)
 		{	 
 		  a = rxBuffer2[1];
           b = rxBuffer2[2];
           if (QRPacke1[0]==0 && QRPacke1[1]==0) 
           {
-            QRPacke1[0]=a; QRPacke1[1]=b;          // 第一�?
+            QRPacke1[0]=a; QRPacke1[1]=b;          // 第一次收到的二维码
           } 
           else if (QRPacke1[0]==a && QRPacke1[1]==b) 
           {
-            // 重复，忽�?
+            // 重复，忽略
           } 
           else 
           {
-            QRPacke[0]=a; QRPacke[1]=b;            // 第二�?最新不同条
+            QRPacke[0]=a; QRPacke[1]=b;            // 第二次最新不同二维码
           }
 		}
 		else if(rxBuffer2[0] == 0xAB && rxBuffer2[6] == 0x55)
@@ -1025,19 +1025,15 @@ int main(void)
     duoji_Turntable_Set_Start_Position();
     HAL_Delay(DUOJI_BOOT_REHOME_DELAY_MS);
     //duoji_tc();
-    // duoji_tc_1();  //抬升
-    // HAL_Delay(10000);
-    // while(1)
-    // {
+    duoji_tc_1();  //抬升
 
-    // }
     // 启动UART DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1,rxBuffer2,sizeof(rxBuffer2));
 	__HAL_DMA_DISABLE_IT(&hdma_usart1_rx,DMA_IT_HT);
 
     txBuffer2[0] = 0xAA;
     txBuffer2[1] = 0x00;
-    txBuffer2[2] = 0x02;
+    txBuffer2[2] = 0x00;
     txBuffer2[3] = 0x55;
     vision_current_cmd = txBuffer2[2];
     HAL_UART_Transmit_DMA(&huart1, txBuffer2, 4);
@@ -1125,12 +1121,11 @@ int main(void)
 //   Emm_V5_Multi_Motor_Cmd_UART4(0);
 stat=1;
 
-//HAL_Delay(5000);
+HAL_Delay(5000);
 /* 修改：暂时执行一次上电初始 Yaw 闭环转角测试，完成后停在主循环。 */
 //Move_RotateCW_FromInitialYaw(90.0f);
 //Move_StartTranslateForTime(270,0.3, 1000);
 // Move_StartTranslateForTime(225,0.3, 1000);
-duoji_tc();    //降低
 
   while (1)
   { 

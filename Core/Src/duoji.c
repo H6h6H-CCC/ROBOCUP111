@@ -616,7 +616,7 @@ void duoji_tc()
 }
 void duoji_tc_1()
 {
-    duoji_Set_ID1_Angle(45);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle(34);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
     duoji_Set_ID2_Angle(260); //正值向上抬升 
     HAL_Delay(1);

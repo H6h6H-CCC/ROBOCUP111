@@ -8,6 +8,7 @@
 #include "duoji.h"
 #include "oled.h"
 #include <math.h>
+#include <stdio.h>
 uint8_t stat=0;
 
 #define Shaoma1 1
@@ -25,6 +26,8 @@ uint8_t stat=0;
 #define VISION_CMD_COLOR     0x04U
 
 extern uint8_t Coulor[5];
+extern uint8_t QRPacke[2];
+extern uint8_t QRPacke1[2];
 extern uint8_t place[7];
 extern uint8_t txBuffer2[10];
 extern volatile uint8_t vision_place_valid;
@@ -309,10 +312,19 @@ void State(void)
 	//CHANge(VISION_CMD_QR_TASK1);
 	if(qwqwq)
 	{		    
-    	duoji_tc();    //降低
+    	   //降低
 		CHANge(3);
 		qwqwq=0;
-		HAL_Delay(3000);
+		// 修改：PB9 按键未按下时保持等待，按下低电平后退出
+		 while(1)
+     	{
+			if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9) == GPIO_PIN_RESET)
+			{
+				break;
+			}
+			HAL_Delay(10);
+  	    }
+		duoji_tc(); 
 	}
 	switch(stat)
 	{
@@ -331,20 +343,50 @@ void State(void)
 						Move_Update();
 						if(g_motionActive)
 						{
-
-							CHANge(1);
 							HAL_Delay(300);
 							Move_StartTranslateForTime(1.1,0.4, 3600);
+							uint32_t task1_qr_start_tick = HAL_GetTick();
+							uint8_t task1_qr_sent = 0U;
 							while(1)
 							{
 								Move_Update();
+								// 修改：运动开始1500ms后发送一次任务1二维码识别指令
+								if((task1_qr_sent == 0U) &&
+								   ((HAL_GetTick() - task1_qr_start_tick) >= 1500U))
+								{
+									CHANge(1);
+									task1_qr_sent = 1U;
+								}
 								if(g_motionActive)
 								{	
 
-									HAL_Delay(300);
-									CHANge(4);
+									HAL_Delay(100);
 									Move_RotateCW_FromInitialYaw(0.0f);
 									HAL_Delay(100);
+						{
+						char qr_debug[40];
+						int qr_debug_len = snprintf(qr_debug, sizeof(qr_debug),
+							"TASK1_QR=%c%c,TASK2_QR=%c%c\r\n",
+							(QRPacke[0] != 0U) ? QRPacke[0] : '0',
+							(QRPacke[1] != 0U) ? QRPacke[1] : '0',
+							(QRPacke1[0] != 0U) ? QRPacke1[0] : '0',
+							(QRPacke1[1] != 0U) ? QRPacke1[1] : '0');
+
+						if (qr_debug_len > 0)
+						{
+							for (uint8_t i = 0U; i < 3U; i++)
+							{
+								HAL_UART_Transmit(&huart2, (uint8_t *)qr_debug,
+									(uint16_t)qr_debug_len, 100U);
+								HAL_Delay(10);
+							}
+						}
+					}
+					// while(1)
+					// {
+
+					// }
+									CHANge(4);
 									State_RunTimedTranslate(90.0f, 0.5f, 500);
 									Move_RotateCW_FromInitialYaw(7.0f);
 									HAL_Delay(200);
