@@ -109,25 +109,14 @@ void XUNji(void)
 extern uint8_t g_motionActive;
 void Task2_Start(void)
 {
-  float gray = Gray_Trace_Get_Dir();
+  // 修改：连续移动，避免短时间反复启停导致速度过慢
+  Move_TranslateContinuous(280.0f, 0.13f);
 
-  while (gray < 3.0f)
+  while (Gray_Trace_Get_Dir() < 3.0f)
   {
-    gray = Gray_Trace_Get_Dir();
-    if (gray >= 3.0f)
-    {
-      break;
-    }
-
-    Move_StartTranslateForTime(280.0f, 4.0f, 50U);
-    while (1)
-    {
-      Move_Update();
-      if (g_motionActive != 0U)
-      {
-        break;
-      }
-    }
+    HAL_Delay(5);
   }
+
+  Move_StopAll();
 }
 

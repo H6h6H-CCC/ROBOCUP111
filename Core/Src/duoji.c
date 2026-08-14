@@ -651,9 +651,9 @@ void guanjun_1()
 }
 void guanjun_2()
 {
-    duoji_Set_ID1_Angle_guanjun(-65);//负值向上抬升 靠近转盘的舵机
+    duoji_Set_ID1_Angle_guanjun(-68);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
-    duoji_Set_ID2_Angle_guanjun(45); //正值向上抬升 
+    duoji_Set_ID2_Angle_guanjun(37); //正值向上抬升 
     HAL_Delay(1);
 }
 volatile uint32_t timer2_tick_count = 0; 

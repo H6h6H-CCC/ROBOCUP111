@@ -1121,7 +1121,7 @@ int main(void)
 //   Emm_V5_Multi_Motor_Cmd_UART4(0);
 stat=1;
 
-HAL_Delay(5000);
+HAL_Delay(2000);
 /* 修改：暂时执行一次上电初始 Yaw 闭环转角测试，完成后停在主循环。 */
 //Move_RotateCW_FromInitialYaw(90.0f);
 //Move_StartTranslateForTime(270,0.3, 1000);
