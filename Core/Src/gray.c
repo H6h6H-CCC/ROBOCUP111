@@ -110,7 +110,7 @@ extern uint8_t g_motionActive;
 void Task2_Start(void)
 {
   // 修改：连续移动，避免短时间反复启停导致速度过慢
-  Move_TranslateContinuous(280.0f, 0.13f);
+  Move_TranslateContinuous(280.0f, 0.08f);
 
   while (Gray_Trace_Get_Dir() < 3.0f)
   {

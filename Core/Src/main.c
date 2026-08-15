@@ -52,6 +52,7 @@
 #define DUOJI_BOOT_REHOME_DELAY_MS 450U
 #define VISION_DEBUG_PRINT_PERIOD_MS 200U
 #define VISION_YAJUN_ACTION_DELAY_MS 600
+#define TASK2_PLACE_TO_BACK_DELAY_MS 800U // 修改：任务二放完物块后等待1秒再回退
 #define JY61P_RX_BUFFER_SIZE 64U
 #define JY61P_DEBUG_PRINT_PERIOD_MS 1000U
 /* USER CODE END PD */
@@ -625,7 +626,7 @@ uint8_t Vision_XY_PID_Then_Forward_Backward(uint16_t vision_x,
     }
 
     if (s_vision_fb_phase == 2U) {
-        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < 100U) {
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < 400U) {
             return 0U;
         }
 
@@ -735,7 +736,8 @@ uint8_t Vision_XY_PID_Then_Forward_Backward2(uint16_t vision_x,
     }
 
     if (s_vision_fb_phase == 2U) {
-        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < VISION_YAJUN_ACTION_DELAY_MS) {
+        // 修改：任务二放完物块后等待1秒再回退
+        if ((HAL_GetTick() - s_vision_fb_wait_start_tick) < TASK2_PLACE_TO_BACK_DELAY_MS) {
             return 0U;
         }
 
@@ -1059,12 +1061,24 @@ int main(void)
     }
   /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+/* Infinite loop */
+/* USER CODE BEGIN WHILE */
 	OLED_Init();
-	//Gray_Trace_GPIO_Init(); 
 	Move_Init();
 	JY61P_RxStop();
+    //HAL_Delay(3000);
+    // task1_1_step1();
+    // HAL_Delay(3000);
+    // task1_1_step2();
+    // HAL_Delay(3000);
+    // task1_1_step3();
+    // HAL_Delay(3000);
+    // task1_1_step4();
+    // HAL_Delay(3000);5
+    // task1_1_finish();
+    //duoji_Turntable_Set_Start_Position();
+   // duoji_Turntable_Set_Port(2);
+	//Gray_Trace_GPIO_Init();
   //Gray_Trace_GPIO_Init(); //确保GPIO已初始化
     //uint8_t a='a';
 	//JY61P_CalibrateAccel();
@@ -1120,13 +1134,13 @@ int main(void)
 //   Emm_V5_MMCL_Pos_Control(3, 0, 100, 30,1600, false, true);
 //   Emm_V5_Multi_Motor_Cmd_UART4(0);
 stat=1;
-
-HAL_Delay(2000);
 /* 修改：暂时执行一次上电初始 Yaw 闭环转角测试，完成后停在主循环。 */
 //Move_RotateCW_FromInitialYaw(90.0f);
 //Move_StartTranslateForTime(270,0.3, 1000);
 // Move_StartTranslateForTime(225,0.3, 1000);
-
+// guanjun_1();
+ HAL_Delay(2000);
+//  guanjun_2();
   while (1)
   { 
     State();

@@ -3,7 +3,7 @@
 
 #define TURNTABLE_duoji_ID            3U
 #define TURNTABLE_PWM_CENTER          duoji_PWM_MID
-#define TURNTABLE_PWM_START_POSITION  804U
+#define TURNTABLE_PWM_START_POSITION  795U
 #define TURNTABLE_PWM_STEP_72_DEG     400U
 #define TURNTABLE_PWM_STEP_36_DEG     200U
 #define TURNTABLE_DEFAULT_MOVE_TIME   450U
@@ -13,6 +13,12 @@
 #define TURNTABLE_SECOND_BALL1_PWM    1614U
 #define TURNTABLE_SECOND_BALL2_PWM    1214U
 #define TURNTABLE_SECOND_BALL3_PWM    814U
+/* 修改：转盘1~5号口的绝对PWM位置，实际使用时直接调整这5个参数。 */
+#define TURNTABLE_PORT1_PWM           795U
+#define TURNTABLE_PORT2_PWM           1206U
+#define TURNTABLE_PORT3_PWM           1602U
+#define TURNTABLE_PORT4_PWM           2001U
+#define TURNTABLE_PORT5_PWM           2414U
 #define duoji_ID1                     1U
 #define duoji_ID2                     2U
 #define duoji_ID1_ZERO_PWM            1900U
@@ -499,6 +505,36 @@ void output_ball_alternating_second(uint8_t ball_number)
     g_turntable_output_preferred_dir = dir;
 }
 
+void duoji_Turntable_Set_Port(uint8_t port_number)
+{
+    uint16_t target_pwm = 0U;
+
+    /* 修改：选择固定绝对PWM位置，不计算相对偏移量。 */
+    switch (port_number)
+    {
+    case 1U:
+        target_pwm = TURNTABLE_PORT1_PWM;
+        break;
+    case 2U:
+        target_pwm = TURNTABLE_PORT2_PWM;
+        break;
+    case 3U:
+        target_pwm = TURNTABLE_PORT3_PWM;
+        break;
+    case 4U:
+        target_pwm = TURNTABLE_PORT4_PWM;
+        break;
+    case 5U:
+        target_pwm = TURNTABLE_PORT5_PWM;
+        break;
+    default:
+        return;
+    }
+
+    duoji_Turntable_Ensure_Position_Mode();
+    duoji_Control(TURNTABLE_duoji_ID, target_pwm, TURNTABLE_DEFAULT_MOVE_TIME);
+}
+
 void duoji_Set_ID1_Angle(float angle_deg)
 {
     duoji_Set_ID1_Angle_Time(angle_deg, AUX_duoji_DEFAULT_MOVE_TIME);
@@ -544,19 +580,19 @@ void duoji_Set_ID2_Angle_Time(float angle_deg, uint16_t time)
 }
 void task1_1_step1(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 406, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task1_1_step2(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 406, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task1_1_step3(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 385, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task1_1_step4(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 417, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task1_1_finish(void)
 {
@@ -585,11 +621,11 @@ void task1_2_step5(void)
 
 void task2_1_step1(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 409, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task2_1_step2(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 410, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CCW, 403, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task2_1_step3(void)
 {
@@ -601,11 +637,11 @@ void task2_2_step1(void)
 }
 void task2_2_step2(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CW, 405, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void task2_2_step3(void)
 {
-    duoji_Turntable_Rotate(duoji_TURNTABLE_CW, TURNTABLE_PWM_STEP_72_DEG, TURNTABLE_DEFAULT_MOVE_TIME);
+    duoji_Turntable_Rotate(duoji_TURNTABLE_CW, 405, TURNTABLE_DEFAULT_MOVE_TIME);
 }
 void duoji_tc()
 {
@@ -651,9 +687,10 @@ void guanjun_1()
 }
 void guanjun_2()
 {
-    duoji_Set_ID1_Angle_guanjun(-68);//负值向上抬升 靠近转盘的舵机
+    // 修改：仅加快 guanjun_2，运动时间由 900ms 调整为 500ms
+    duoji_Set_ID1_Angle_Time(-82.0f, 450U);//负值向上抬升 靠近转盘的舵机
     HAL_Delay(1);
-    duoji_Set_ID2_Angle_guanjun(37); //正值向上抬升 
+    duoji_Set_ID2_Angle_Time(48.0f, 450U); //正值向上抬升
     HAL_Delay(1);
 }
 volatile uint32_t timer2_tick_count = 0; 

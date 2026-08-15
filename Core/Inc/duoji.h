@@ -101,6 +101,7 @@ void duoji_Turntable_Set_Start_Position(void);
 void duoji_Turntable_Sync_Start_Position(void);
 void output_ball_alternating(uint8_t ball_number);
 void output_ball_alternating_second(uint8_t ball_number);
+void duoji_Turntable_Set_Port(uint8_t port_number); // 修改：转盘1~5号口绝对位置控制
 
 /* 舵机1/2角度控制API */
 void duoji_Set_ID1_Angle(float angle_deg);

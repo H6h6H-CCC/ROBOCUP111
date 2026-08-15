@@ -36,6 +36,7 @@ extern uint8_t g_motionActive;
 extern uint8_t count1;
 extern int ball_1[5];
 extern int ball_2[5];
+extern uint8_t outLetter[4]; // 修改：用于输出任务二二维码解析顺序
 extern uint8_t get_vision_xy(uint16_t *vision_x, uint16_t *vision_y, uint16_t max_x, uint16_t max_y);
 extern void Vision_XY_PID_Then_Forward_Backward_Reset(void);
 extern uint8_t Vision_XY_PID_Then_Forward_Backward(uint16_t vision_x,
@@ -171,11 +172,23 @@ static uint8_t State_ColorExists(uint8_t color)
 	return 0;
 }
 
-static void State_FillTask1Colors(void)
+static void State_FillTaskData(void)
 {
 	const uint8_t color_order[5] = {'k', 'w', 'r', 'g', 'b'};
 	uint8_t i = 0;
 	uint8_t j = 0;
+
+	// 修改：二维码未完整收到时，任务1和任务2都默认补为编号1（ASCII "01"）
+	if((QRPacke[0] == 0U) || (QRPacke[1] == 0U))
+	{
+		QRPacke[0] = '0';
+		QRPacke[1] = '1';
+	}
+	if((QRPacke1[0] == 0U) || (QRPacke1[1] == 0U))
+	{
+		QRPacke1[0] = '0';
+		QRPacke1[1] = '1';
+	}
 
 	for(i = 0; i < 5; i++)
 	{
@@ -240,8 +253,8 @@ static void State_RunTask1VisionPoint(float forward_distance_m, uint16_t center_
 		HAL_Delay(5);
 	}
 }
-//任务二放置函数
-static void State_RunTask2VisionPoint(float forward_distance_m, float backward_distance_m){
+//任务二放置函数；center_x_px 用于调整视觉横向目标位置
+static void State_RunTask2VisionPoint(float forward_distance_m, float backward_distance_m, uint16_t center_x_px){
 	uint16_t vision_x = 0U;
 	uint16_t vision_y = 0U;
 	uint8_t vision_valid = 0U;
@@ -251,7 +264,7 @@ static void State_RunTask2VisionPoint(float forward_distance_m, float backward_d
 	{
 		vision_valid = get_vision_xy(&vision_x, &vision_y, 960U, 720U);
 		if(Vision_XY_PID_Then_Forward_Backward2(vision_x, vision_y, vision_valid,
-											   526U, 960U,
+											   center_x_px, 960U,
 											   360U, 720U,
 											   2U, 2U,
 											   0.0008f, 0.00000f, 0.00000f,
@@ -306,7 +319,7 @@ void State(void)
 {
 	uint16_t vision_x = 0U;
 	uint16_t vision_y = 0U;
-	// goto aaa1;
+	 //goto aaa1;
 
 	//CHANge(3);
 	//CHANge(VISION_CMD_QR_TASK1);
@@ -363,7 +376,15 @@ void State(void)
 									HAL_Delay(100);
 									Move_RotateCW_FromInitialYaw(0.0f);
 									HAL_Delay(100);
-						{
+						
+					// while(1)
+					// {
+
+					// }
+									
+									State_RunTimedTranslate(90.0f, 0.5f, 500);
+									CHANge(4);
+									{
 						char qr_debug[40];
 						int qr_debug_len = snprintf(qr_debug, sizeof(qr_debug),
 							"TASK1_QR=%c%c,TASK2_QR=%c%c\r\n",
@@ -382,13 +403,6 @@ void State(void)
 							}
 						}
 					}
-					// while(1)
-					// {
-
-					// }
-									
-									State_RunTimedTranslate(90.0f, 0.5f, 500);
-									CHANge(4);
 									Move_RotateCW_FromInitialYaw(7.0f);
 									HAL_Delay(200);
 									GetTask1SequenceHexArray();
@@ -475,14 +489,16 @@ void State(void)
 			break;
 		case 3:
 		//111 
-			State_FillTask1Colors();
+			State_FillTaskData(); // 修改：在原位置统一补全二维码和任务1颜色
 			BuildBall1OrderFromQr();
 			//	CHANge(VISION_CMD_CIRCLE);
 
 			State_RunTimedTranslate(235.0f, 0.5f, 2530U);
 			State_RunTimedTranslate(0.0f, 0.3f, 500U);
 			HAL_Delay(200);
-			output_ball_alternating((uint8_t)ball_1[0]);
+			//output_ball_alternating((uint8_t)ball_1[0]);
+			duoji_Turntable_Set_Port((uint8_t)ball_1[0]);
+
 			HAL_Delay(200);
 
 			// 修改：未收到有效视觉坐标时持续等待
@@ -491,7 +507,7 @@ void State(void)
 				HAL_Delay(5);
 			}
 
-			State_RunTask1VisionPoint(0.156f, 524U);
+			State_RunTask1VisionPoint(0.156f, 528U);
 			
 			//set_servo_angle_direction(2U, 36.0f, 1U);
 			
@@ -500,9 +516,10 @@ void State(void)
 			
 			State_RunTimedTranslate(278.0f, 0.35f, 1400U);
 			//set_servo_angle_direction(2U, 72.0f, 1U);
-			output_ball_alternating((uint8_t)ball_1[1]);
+			//output_ball_alternating((uint8_t)ball_1[1]);
+			duoji_Turntable_Set_Port((uint8_t)ball_1[1]);
 			HAL_Delay(300);
-			State_RunTask1VisionPoint(0.156f, 524U);
+			State_RunTask1VisionPoint(0.156f, 527U);
 
 
 			
@@ -510,11 +527,12 @@ void State(void)
 			State_RunTimedTranslate(270.0f, 0.35f, 1500U);
 			Move_RotateCW_FromInitialYaw(135.0f);
 			HAL_Delay(100);
-			State_RunTimedTranslate(7.0f, 0.4f, 2250U);    
+			State_RunTimedTranslate(5.0f, 0.4f, 2250U);    
 			//set_servo_angle_direction(2U, 72.0f, 1U);
-			output_ball_alternating((uint8_t)ball_1[2]);
+			//output_ball_alternating((uint8_t)ball_1[2]);
+			duoji_Turntable_Set_Port((uint8_t)ball_1[2]);
 			HAL_Delay(300);
-			State_RunTask1VisionPoint(0.155f, 524U);
+			State_RunTask1VisionPoint(0.156f, 527U);
 			
 
 			
@@ -522,18 +540,21 @@ void State(void)
 			State_RunTimedTranslate(245.0f, 0.4f, 1360U);
 			HAL_Delay(100);
 			//set_servo_angle_direction(2U, 72.0f, 1U);
-			output_ball_alternating((uint8_t)ball_1[3]);
+			//output_ball_alternating((uint8_t)ball_1[3]);
+			duoji_Turntable_Set_Port((uint8_t)ball_1[3]);
 			HAL_Delay(300);
-			State_RunTask1VisionPoint(0.155f, 524U);
+			State_RunTask1VisionPoint(0.155f, 525U);
 			
 
 			
 			State_RunTimedTranslate(270.0f, 0.35f, 1100U);
-			State_RunTimedTranslate(0.0f, 0.45f, 1500U);
+			State_RunTimedTranslate(-1.0f, 0.45f, 1450U);
 			//set_servo_angle_direction(2U, 72.0f, 1U);
-			output_ball_alternating((uint8_t)ball_1[4]);
+			//output_ball_alternating((uint8_t)ball_1[4]);
+			duoji_Turntable_Set_Port((uint8_t)ball_1[4]);
+			
 			HAL_Delay(300);
-			State_RunTask1VisionPoint(0.155f, 524U);
+			State_RunTask1VisionPoint(0.156f, 527U);
 			
             duoji_Turntable_Set_Start_Position();
 			GetTask1SequenceHexArray();
@@ -546,7 +567,7 @@ void State(void)
 			break;
 		case 5:
 		//aaa1:
-			Move_StartTranslateForTime(280,0.4,2350);
+			Move_StartTranslateForTime(280,0.4,2300);
 
 			// while(1)
 			// {
@@ -573,7 +594,7 @@ void State(void)
 						{
 							goto EXIT_CASE6; 
 						}
-						else if((timnow-timstart)>=4400)
+						else if((timnow-timstart)>=4300)
 						{
 							if(case5_turn3)
 							{
@@ -581,7 +602,7 @@ void State(void)
 								case5_turn3=0;
 							}
 						}
-						else if((timnow-timstart)>=3400)
+						else if((timnow-timstart)>=3300)
 						{
 							if(case5_turn2)
 							{
@@ -589,7 +610,7 @@ void State(void)
 								case5_turn2=0;
 							}
 						}
-						else if((timnow-timstart)>=2200)
+						else if((timnow-timstart)>=2000)
 						{
 							if(case5_turn1)
 							{
@@ -621,8 +642,10 @@ void State(void)
 				{
 					//Move_RotateCW_FromInitialYaw(89.5f);
 					HAL_Delay(100);
-					// aaa1:
-					// yajun_1();///记得注释！！！！！！！！！！！
+					//  aaa1:
+					//  HAL_Delay(1000);
+					//  CHANge(2);
+					//  yajun_1();///记得注释！！！！！！！！！！！
 					vision_x = 0U;
 					vision_y = 0U;
 					for(uint8_t i = 0U; i < 6U; i++)
@@ -691,9 +714,35 @@ void State(void)
 					// {
 					// stat=3;
 					// GetTask1SequenceHexArray();
+					// 修改：ball_2[0..2]依次保存亚军b、冠军a、季军c所在的逻辑仓号
 					BuildBall2OrderFromQr();
-					output_ball_alternating_second((uint8_t)ball_2[0]);
-					State_RunTask2VisionPoint(0.189f, 0.275f); // 修改：第二个参数为后退距离
+					/* 修改：任务二顺序调试完成，暂时关闭串口输出
+					{
+						// 修改：任务二放置前输出二维码、映射顺序和端口，每次仅发送2遍
+						char task2_debug[64];
+						int task2_debug_len = snprintf(task2_debug, sizeof(task2_debug),
+							"TASK2_QR=%c%c,OUT=%c%c%c,BALL=%d%d%d\r\n",
+							(QRPacke1[0] != 0U) ? QRPacke1[0] : '0',
+							(QRPacke1[1] != 0U) ? QRPacke1[1] : '0',
+							(outLetter[0] != 0U) ? outLetter[0] : '0',
+							(outLetter[1] != 0U) ? outLetter[1] : '0',
+							(outLetter[2] != 0U) ? outLetter[2] : '0',
+							ball_2[0], ball_2[1], ball_2[2]);
+
+						if(task2_debug_len > 0)
+						{
+							for(uint8_t i = 0U; i < 2U; i++)
+							{
+								HAL_UART_Transmit(&huart2, (uint8_t *)task2_debug,
+									(uint16_t)task2_debug_len, 100U);
+								HAL_Delay(10);
+							}
+						}
+					}
+					*/
+					// 修改：实际转盘1号口和3号口反向，使用4-逻辑仓号转换为物理端口
+					duoji_Turntable_Set_Port(4U - (uint8_t)ball_2[0]); // 第一次：亚军位置放b
+					State_RunTask2VisionPoint(0.164f, 0.275f, 528U); // 修改：第三个参数为中心坐标
 					Move_StartTranslateForTime(90,0.29,1240);
 					guanjun_1();
 					while(1)
@@ -701,8 +750,8 @@ void State(void)
 						Move_Update();
 						if(g_motionActive)
 						{
-							output_ball_alternating_second((uint8_t)ball_2[1]);
-							State_RunTask2VisionPoint(0.208f, 0.290f); // 修改：第二次额外后退2厘米
+							duoji_Turntable_Set_Port(4U - (uint8_t)ball_2[1]); // 第二次：冠军位置放a
+							State_RunTask2VisionPoint(0.181f, 0.290f, 529U); // 修改：第二次额外后退2厘米，第三个参数为中心坐标
 							HAL_Delay(10);
 							Move_StartTranslateForTime(90,0.29,1200);
 							duoji_tc_2();
@@ -712,11 +761,11 @@ void State(void)
 								Move_Update();
 				if(g_motionActive)
 				{
-					output_ball_alternating_second((uint8_t)ball_2[2]);
+					duoji_Turntable_Set_Port(4U - (uint8_t)ball_2[2]); // 第三次：季军位置放c
 					// 修改：靠近转盘的 ID1 舵机下降 2°（-122° -> -120°）
 					duoji_Set_ID1_Angle_yajun(-112.0f);
 					duoji_Set_ID2_Angle(15.0f);
-					State_RunTask1VisionPoint(0.16f, 522U); // 第三次放置前移2厘米
+					State_RunTask1VisionPoint(0.158f, 524U); // 第三次放置前移2厘米
 									HAL_Delay(100);
 					 				goto EXIT_CASE7; 									
 								}
@@ -735,7 +784,7 @@ void State(void)
 		case 7:
 			Move_RotateCW_FromInitialYaw(89.5f);
 			HAL_Delay(100);
-			Move_StartTranslateForTime(193.5,0.5,4000);
+			Move_StartTranslateForTime(190.5,0.5,3910);
 			duoji_tc_1(); 
 			while(1)
 			{
